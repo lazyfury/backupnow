@@ -69,6 +69,7 @@ backupnow 0.1.0 (aarch64-apple-darwin, 2026-10-10T21:04:37Z, 28a3dfe)
 ```bash
 # 新建库（默认 dest = /Volumes/数据/Backups）
 backupnow init pi --path ~/.pi                     # 普通目录 → snapshot
+backupnow init --path /Applications/Foo.app        # 省略库名 → 按文件夹自动命名（Foo.app）
 backupnow init proj --path ~/code/proj             # 有 .git → 自动 mirror
 backupnow init proj --path ~/code/proj --mode mirror
 backupnow init proj --path ~/code/proj --preset macos,xcode,node   # 忽略预设

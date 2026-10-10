@@ -169,8 +169,8 @@ pub enum ConfigAction {
 
 #[derive(Args, Debug)]
 pub struct InitArgs {
-    /// 库名（仓库目录名 = <name>.git）
-    pub name: String,
+    /// 库名（省略时按源文件夹自动命名）
+    pub name: Option<String>,
     /// 源目录
     #[arg(long)]
     pub path: PathBuf,

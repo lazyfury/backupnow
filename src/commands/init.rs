@@ -6,7 +6,6 @@ use std::path::Path;
 
 pub fn run(app: &AppConfig, dest: &Path, a: InitArgs) -> Result<()> {
     git::ensure_git()?;
-    validate_name(&a.name)?;
 
     let source = std::fs::canonicalize(&a.path)
         .with_context(|| format!("源目录不存在: {}", a.path.display()))?;
@@ -14,10 +13,17 @@ pub fn run(app: &AppConfig, dest: &Path, a: InitArgs) -> Result<()> {
         bail!("源不是目录: {}", source.display());
     }
 
+    // 库名：显式给出，否则按源文件夹名自动命名
+    let name = match &a.name {
+        Some(n) => n.clone(),
+        None => derive_name(&source)?,
+    };
+    validate_name(&name)?;
+
     std::fs::create_dir_all(dest)
         .with_context(|| format!("无法创建备份根: {}", dest.display()))?;
 
-    let repo = dest.join(format!("{}.git", a.name));
+    let repo = dest.join(format!("{}.git", name));
     if repo.exists() {
         bail!("库已存在: {}", repo.display());
     }
@@ -66,7 +72,7 @@ pub fn run(app: &AppConfig, dest: &Path, a: InitArgs) -> Result<()> {
         }
     }
 
-    let sf = SyncFile::new(a.name.clone(), &source, ignore, &mode, source_manifest);
+    let sf = SyncFile::new(name.clone(), &source, ignore, &mode, source_manifest);
     sf.write_all(&repo)?;
     sf.write_exclude(&repo)?;
 
@@ -74,7 +80,7 @@ pub fn run(app: &AppConfig, dest: &Path, a: InitArgs) -> Result<()> {
         "snapshot" => {
             let g = Git::worktree(&repo, &source);
             g.run(&["add", "-A"])?;
-            let msg = format!("init: {} @ {}", a.name, sf.created_at);
+            let msg = format!("init: {} @ {}", name, sf.created_at);
             g.run(&["commit", "-m", &msg])?;
             if app.xattr {
                 let files = g.ls_files()?;
@@ -119,7 +125,7 @@ pub fn run(app: &AppConfig, dest: &Path, a: InitArgs) -> Result<()> {
         .trim()
         .to_string();
 
-    println!("✅ 已创建库 `{}`  (模式: {mode})", a.name);
+    println!("✅ 已创建库 `{}`  (模式: {mode})", name);
     println!("   源目录   : {}", source.display());
     println!("   仓库     : {}", repo.display());
     println!("   清单     : {}", repo.join(SYNC_FILE).display());
@@ -135,4 +141,18 @@ pub fn run(app: &AppConfig, dest: &Path, a: InitArgs) -> Result<()> {
         println!("   镜像 refs: {refs}");
     }
     Ok(())
+}
+
+/// 从源目录名推导库名（保留 .app 等后缀，去掉开头的点）
+fn derive_name(source: &Path) -> Result<String> {
+    let base = source
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .filter(|s| !s.is_empty())
+        .with_context(|| format!("无法从路径推导库名: {}", source.display()))?;
+    let name = base.trim_start_matches('.').to_string();
+    if name.is_empty() {
+        bail!("无法从路径推导库名: {}", source.display());
+    }
+    Ok(name)
 }
