@@ -1,7 +1,8 @@
 use crate::cli::RestoreArgs;
 use crate::commands::locate;
 use crate::config::SyncFile;
-use crate::git::Git;
+use crate::git::{self, Git};
+use crate::meta;
 use anyhow::{bail, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -14,6 +15,22 @@ pub fn run(dest: &Path, a: RestoreArgs) -> Result<()> {
         return restore_mirror(&sf, &repo, &target, &a);
     }
     restore_snapshot(&sf, &repo, &target, &a)
+}
+
+/// 从备份仓库读 xattr note 并写回 target
+fn apply_xattr(repo: &Path, target: &Path, commit: &str, sub: Option<&str>) -> Result<usize> {
+    let g = Git::bare(repo);
+    let json = match g.notes_show(meta::NOTE_REF, commit)? {
+        Some(j) if !j.trim().is_empty() => j,
+        _ => return Ok(0),
+    };
+    let manifest = meta::Manifest::from_json(&json)?;
+    let scoped = manifest.under(sub);
+    let (n, warns) = meta::apply(target, &scoped);
+    for w in warns {
+        eprintln!("⚠️  xattr: {w}");
+    }
+    Ok(n)
 }
 
 fn restore_snapshot(sf: &SyncFile, repo: &Path, target: &Path, a: &RestoreArgs) -> Result<()> {
@@ -31,8 +48,14 @@ fn restore_snapshot(sf: &SyncFile, repo: &Path, target: &Path, a: &RestoreArgs) 
     let pathspec = a.path.clone().unwrap_or_else(|| ".".into());
     g.run(&["checkout", "-f", &rev, "--", &pathspec])?;
 
+    let commit = g.run(&["rev-parse", &rev])?.trim().to_string();
+    let n = apply_xattr(repo, target, &commit, a.path.as_deref())?;
+
     println!("✅ 已恢复 `{}` → {}", sf.name, target.display());
     println!("   版本: {rev}");
+    if n > 0 {
+        println!("   xattr: 已还原 {n} 项");
+    }
     Ok(())
 }
 
@@ -54,7 +77,7 @@ fn restore_mirror(sf: &SyncFile, repo: &Path, target: &Path, a: &RestoreArgs) ->
         if !out.status.success() {
             bail!("git clone 失败: {}", String::from_utf8_lossy(&out.stderr).trim());
         }
-        if let Some(rev) = &a.rev {
+        let commit = if let Some(rev) = &a.rev {
             let out = Command::new("git")
                 .arg("-C")
                 .arg(target)
@@ -66,8 +89,15 @@ fn restore_mirror(sf: &SyncFile, repo: &Path, target: &Path, a: &RestoreArgs) ->
                     String::from_utf8_lossy(&out.stderr).trim()
                 );
             }
-        }
+            Git::bare(repo).run(&["rev-parse", rev])?.trim().to_string()
+        } else {
+            git::repo_head(target)?
+        };
+        let n = apply_xattr(repo, target, &commit, a.path.as_deref())?;
         println!("✅ 已克隆 `{}` → {}", sf.name, target.display());
+        if n > 0 {
+            println!("   xattr: 已还原 {n} 项");
+        }
         return Ok(());
     }
 
@@ -81,10 +111,15 @@ fn restore_mirror(sf: &SyncFile, repo: &Path, target: &Path, a: &RestoreArgs) ->
     let rev = a.rev.clone().unwrap_or_else(|| "HEAD".into());
     let pathspec = a.path.clone().unwrap_or_else(|| ".".into());
     g.run(&["checkout", "-f", &rev, "--", &pathspec])?;
+    let commit = g.run(&["rev-parse", &rev])?.trim().to_string();
+    let n = apply_xattr(repo, target, &commit, a.path.as_deref())?;
     println!(
         "✅ 已覆盖恢复 `{}` → {}（仅默认分支工作区）",
         sf.name,
         target.display()
     );
+    if n > 0 {
+        println!("   xattr: 已还原 {n} 项");
+    }
     Ok(())
 }

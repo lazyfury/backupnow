@@ -107,8 +107,51 @@ impl Git {
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
     }
 
-    pub fn head_short(&self) -> Result<String> {
-        Ok(self.run(&["rev-parse", "--short", "HEAD"])?.trim().to_string())
+    /// 完整 HEAD sha
+    pub fn head(&self) -> Result<String> {
+        Ok(self.run(&["rev-parse", "HEAD"])?.trim().to_string())
+    }
+
+    /// 追踪的相对路径列表
+    pub fn ls_files(&self) -> Result<Vec<String>> {
+        let out = self.run(&["ls-files", "-z"])?;
+        Ok(out
+            .split('\0')
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+            .collect())
+    }
+
+    /// 成功返回 stdout，失败返回 None（不报错）
+    pub fn try_run(&self, args: &[&str]) -> Result<Option<String>> {
+        let out = self.base().args(args).output()?;
+        if out.status.success() {
+            Ok(Some(String::from_utf8_lossy(&out.stdout).into_owned()))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// 写 git note（-F - 从 stdin 读）
+    pub fn notes_add(&self, refname: &str, commit: &str, content: &str) -> Result<()> {
+        self.run_with_stdin(
+            &[
+                "notes",
+                &format!("--ref={refname}"),
+                "add",
+                "-f",
+                "-F",
+                "-",
+                commit,
+            ],
+            content.as_bytes(),
+        )?;
+        Ok(())
+    }
+
+    /// 读 git note
+    pub fn notes_show(&self, refname: &str, commit: &str) -> Result<Option<String>> {
+        self.try_run(&["notes", &format!("--ref={refname}"), "show", commit])
     }
 }
 
@@ -150,4 +193,36 @@ pub fn dirty_count(source: &Path) -> usize {
                 .count()
         })
         .unwrap_or(0)
+}
+
+/// 某个仓库的 HEAD 完整 sha（git -C <repo> rev-parse HEAD）
+pub fn repo_head(repo: &Path) -> Result<String> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .context("执行 git rev-parse HEAD 失败")?;
+    if !out.status.success() {
+        bail!(
+            "rev-parse HEAD 失败: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// 某个仓库追踪的相对路径（git -C <repo> ls-files -z）
+pub fn repo_ls_files(repo: &Path) -> Result<Vec<String>> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["ls-files", "-z"])
+        .output()
+        .context("执行 git ls-files 失败")?;
+    Ok(String::from_utf8_lossy(&out.stdout)
+        .split('\0')
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .collect())
 }

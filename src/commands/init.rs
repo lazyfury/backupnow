@@ -63,10 +63,33 @@ pub fn run(app: &AppConfig, dest: &Path, a: InitArgs) -> Result<()> {
             g.run(&["add", "-A"])?;
             let msg = format!("init: {} @ {}", a.name, sf.created_at);
             g.run(&["commit", "-m", &msg])?;
+            if app.xattr {
+                let files = g.ls_files()?;
+                let head = g.head()?;
+                let _ = crate::commands::sync_xattr_note(
+                    &g,
+                    &files,
+                    &source,
+                    &app.xattr_ignore,
+                    &head,
+                );
+            }
         }
         "mirror" => {
             let g = Git::bare(&repo);
             let _ = g.run(&["remote", "update", "--prune"]);
+            if app.xattr {
+                if let Ok(head) = git::repo_head(&source) {
+                    let files = git::repo_ls_files(&source).unwrap_or_default();
+                    let _ = crate::commands::sync_xattr_note(
+                        &g,
+                        &files,
+                        &source,
+                        &app.xattr_ignore,
+                        &head,
+                    );
+                }
+            }
         }
         _ => unreachable!(),
     }

@@ -1,5 +1,5 @@
 use crate::cli::SaveArgs;
-use crate::commands::{locate, merge_ignore};
+use crate::commands::{locate, merge_ignore, sync_xattr_note};
 use crate::config::{AppConfig, SyncFile};
 use crate::git::{self, Git};
 use anyhow::{bail, Result};
@@ -13,7 +13,7 @@ pub fn run(app: &AppConfig, dest: &Path, a: SaveArgs) -> Result<()> {
     }
 
     if sf.mode == "mirror" {
-        save_mirror(&sf, &repo, &source)
+        save_mirror(app, &sf, &repo, &source)
     } else {
         save_snapshot(app, &mut sf, &repo, &source, &a)
     }
@@ -58,51 +58,70 @@ fn save_snapshot(
     }
 
     g.run(&["add", "-A"])?;
-
     let has_changes = !g.success(&["diff", "--cached", "--quiet"])?;
-    if !has_changes {
-        println!("没有变化，跳过。");
-        if removed > 0 {
-            println!("（取消了 {removed} 个被忽略文件的跟踪）");
-        }
-        return Ok(());
+
+    if has_changes {
+        let msg = a.message.clone().unwrap_or_else(|| {
+            format!(
+                "backup: {} {} @ {}",
+                sf.name,
+                sf.source.user,
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+            )
+        });
+        g.run(&["commit", "-m", &msg])?;
     }
 
-    let msg = a.message.clone().unwrap_or_else(|| {
-        format!(
-            "backup: {} {} @ {}",
-            sf.name,
-            sf.source.user,
-            chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
-        )
-    });
-    g.run(&["commit", "-m", &msg])?;
-    let head = g.head_short()?;
+    let head = g.head()?;
+
+    // xattr 清单（内容没变但 xattr 变了也会更新）
+    let mut xattr_updated = false;
+    if app.xattr {
+        let files = g.ls_files()?;
+        xattr_updated = sync_xattr_note(&g, &files, source, &app.xattr_ignore, &head)?;
+    }
 
     sf.write_all(repo)?;
     let _ = g.run(&["gc", "--auto"]);
 
-    println!("✅ 已保存 `{}` → {}", sf.name, head);
-    if removed > 0 {
-        println!("   取消跟踪被忽略文件: {removed} 个");
+    let short = &head[..head.len().min(7)];
+    if has_changes {
+        println!("✅ 已保存 `{}` → {short}", sf.name);
+        if removed > 0 {
+            println!("   取消跟踪被忽略文件: {removed} 个");
+        }
+    } else {
+        println!("没有变化，跳过。");
+        if removed > 0 {
+            println!("（取消了 {removed} 个被忽略文件的跟踪）");
+        }
+    }
+    if xattr_updated {
+        println!("   已更新 xattr 清单");
     }
     Ok(())
 }
 
 /// mirror：把源仓库的所有 refs 拉取到盘上镜像
-fn save_mirror(sf: &SyncFile, repo: &Path, source: &Path) -> Result<()> {
-    // 未提交改动不会被备份 —— 警告到 stderr
+fn save_mirror(app: &AppConfig, sf: &SyncFile, repo: &Path, source: &Path) -> Result<()> {
     let dirty = git::dirty_count(source);
     if dirty > 0 {
-        eprintln!(
-            "⚠️  源仓库有 {dirty} 处未提交改动，不会被备份（mirror 只备份已提交内容）"
-        );
+        eprintln!("⚠️  源仓库有 {dirty} 处未提交改动，不会被备份（mirror 只备份已提交内容）");
     }
 
     let g = Git::bare(repo);
     let before = g.run(&["rev-parse", "--all"]).unwrap_or_default();
     g.run(&["remote", "update", "--prune"])?;
     let after = g.run(&["rev-parse", "--all"]).unwrap_or_default();
+
+    // xattr 清单挂到源 HEAD 对应的镜像提交上
+    let mut xattr_updated = false;
+    if app.xattr {
+        if let Ok(head) = git::repo_head(source) {
+            let files = git::repo_ls_files(source).unwrap_or_default();
+            xattr_updated = sync_xattr_note(&g, &files, source, &app.xattr_ignore, &head)?;
+        }
+    }
 
     let refs = g
         .run(&["for-each-ref", "--format=%(refname)"])
@@ -114,6 +133,9 @@ fn save_mirror(sf: &SyncFile, repo: &Path, source: &Path) -> Result<()> {
         println!("没有变化（{refs} 个 ref）。");
     } else {
         println!("✅ 已镜像 `{}`（{refs} 个 ref）", sf.name);
+    }
+    if xattr_updated {
+        println!("   已更新 xattr 清单");
     }
     Ok(())
 }

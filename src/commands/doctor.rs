@@ -2,6 +2,7 @@ use crate::cli::DoctorArgs;
 use crate::commands::locate;
 use crate::config::{AppConfig, SYNC_FILE};
 use crate::git::{self, Git};
+use crate::meta;
 use anyhow::Result;
 use std::path::Path;
 
@@ -97,6 +98,27 @@ pub fn run(_app: &AppConfig, dest: &Path, a: DoctorArgs) -> Result<()> {
             &format!("源目录清单副本 ({})", src_copy.display()),
             src_copy.exists(),
         );
+    }
+
+    // xattr 清单
+    let head = if sf.mode == "mirror" {
+        git::repo_head(Path::new(&sf.source.path)).ok()
+    } else {
+        Git::bare(&repo)
+            .run(&["rev-parse", "HEAD"])
+            .ok()
+            .map(|s| s.trim().to_string())
+    };
+    if let Some(h) = head {
+        match Git::bare(&repo).notes_show(meta::NOTE_REF, &h) {
+            Ok(Some(j)) if !j.trim().is_empty() => {
+                let n = meta::Manifest::from_json(&j)
+                    .map(|m| m.entries.len())
+                    .unwrap_or(0);
+                report(&format!("xattr 清单（{n} 个文件）"), true);
+            }
+            _ => println!("ℹ️  无 xattr 清单（下次 save 生成）"),
+        }
     }
 
     println!();

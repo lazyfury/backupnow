@@ -86,6 +86,8 @@ pub enum ConfigAction {
     SetDest { path: PathBuf },
     /// 清除默认备份根
     UnsetDest,
+    /// 开关 xattr 采集/还原（on/off）
+    SetXattr { value: String },
 }
 
 #[derive(Args, Debug)]

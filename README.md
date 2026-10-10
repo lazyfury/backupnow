@@ -95,6 +95,25 @@ backupnow doctor pi
 
 > `save` 会自动检测"已被忽略但仍被 git 跟踪"的文件并用 `git rm --cached` 取消跟踪，避免盘上残留。
 
+## xattr / Finder 标签
+
+macOS 的 Finder 彩色标签、quarantine、资源叉等都在 xattr 里，git 不存。backupnow 会把它们采集进一个 **git note**（`refs/notes/backupnow/xattr`，挂在对应 commit 上），**不污染源目录**。
+
+- `save` / `init`：采集工作区文件的 xattr，写入 note（内容没变但 xattr 变了也会更新）
+- `restore`：checkout 后自动写回 xattr（失败仅警告）
+- 值以 base64 存储，二进制精确往返
+
+```json
+{
+  "v": 1,
+  "entries": [
+    { "p": "a.txt", "x": { "com.apple.metadata:_kMDItemUserTags": "<base64>" } }
+  ]
+}
+```
+
+开关与过滤：`backupnow config set-xattr off`，或在配置里写 `xattrIgnore` 排除某些键。
+
 ## 配置
 
 `~/.config/backupnow/config.json`（可选）：
@@ -102,7 +121,9 @@ backupnow doctor pi
 ```json
 {
   "dest": "/Volumes/数据/Backups",
-  "ignore": [".DS_Store", "agent/install", "node_modules", "agent/sessions"]
+  "ignore": [".DS_Store", "agent/install", "node_modules", "agent/sessions"],
+  "xattr": true,
+  "xattrIgnore": []
 }
 ```
 
@@ -111,6 +132,7 @@ backupnow doctor pi
 ```bash
 backupnow config show                 # 查看配置文件路径与当前解析结果
 backupnow config set-dest /Volumes/数据/Backups   # 持久化默认根
+backupnow config set-xattr off        # 关闭 xattr 采集/还原
 backupnow config unset-dest
 ```
 

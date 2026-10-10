@@ -10,6 +10,8 @@ pub mod status;
 pub mod timer;
 
 use crate::config::{SyncFile, SYNC_FILE};
+use crate::git::Git;
+use crate::meta;
 use anyhow::{bail, Result};
 use std::path::{Path, PathBuf};
 
@@ -78,4 +80,22 @@ pub fn merge_ignore(defaults: &[String], current: &[String]) -> Vec<String> {
         }
     }
     out
+}
+
+/// 采集并写入 xattr git note；返回是否有变化
+pub fn sync_xattr_note(
+    g: &Git,
+    files: &[String],
+    source: &Path,
+    ignore: &[String],
+    commit: &str,
+) -> Result<bool> {
+    let manifest = meta::capture(source, files, ignore);
+    let json = manifest.to_json();
+    let existing = g.notes_show(meta::NOTE_REF, commit)?;
+    if existing.as_deref().map(str::trim) == Some(json.trim()) {
+        return Ok(false);
+    }
+    g.notes_add(meta::NOTE_REF, commit, &json)?;
+    Ok(true)
 }

@@ -11,12 +11,18 @@ pub const DEFAULT_IGNORE: &[&str] = &[".DS_Store", "agent/install", "node_module
 pub struct AppConfig {
     pub dest: PathBuf,
     pub default_ignore: Vec<String>,
+    /// 是否采集/还原 xattr（Finder 标签等）
+    pub xattr: bool,
+    /// 要忽略的 xattr 名
+    pub xattr_ignore: Vec<String>,
 }
 
 impl AppConfig {
     pub fn load(cli_dest: Option<PathBuf>) -> Self {
         let mut dest: Option<PathBuf> = None;
         let mut ignore: Vec<String> = DEFAULT_IGNORE.iter().map(|s| s.to_string()).collect();
+        let mut xattr = true;
+        let mut xattr_ignore: Vec<String> = Vec::new();
 
         if let Some(path) = config_file_path() {
             if let Ok(text) = std::fs::read_to_string(&path) {
@@ -32,6 +38,15 @@ impl AppConfig {
                         if !list.is_empty() {
                             ignore = list;
                         }
+                    }
+                    if let Some(b) = v.get("xattr").and_then(|x| x.as_bool()) {
+                        xattr = b;
+                    }
+                    if let Some(arr) = v.get("xattrIgnore").and_then(|x| x.as_array()) {
+                        xattr_ignore = arr
+                            .iter()
+                            .filter_map(|x| x.as_str().map(String::from))
+                            .collect();
                     }
                 }
             }
@@ -49,6 +64,8 @@ impl AppConfig {
         Self {
             dest: dest.unwrap_or_else(|| PathBuf::from(DEFAULT_DEST)),
             default_ignore: ignore,
+            xattr,
+            xattr_ignore,
         }
     }
 }
@@ -59,7 +76,7 @@ pub fn config_file_path() -> Option<PathBuf> {
 }
 
 /// 写入配置文件。`dest = None` 表示移除 dest 字段。
-pub fn write_config_file(dest: Option<&Path>, ignore: &[String]) -> Result<()> {
+pub fn write_config_file(dest: Option<&Path>, app: &AppConfig) -> Result<()> {
     let path = config_file_path().context("无法确定配置路径（$HOME 未设置？）")?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
@@ -71,7 +88,22 @@ pub fn write_config_file(dest: Option<&Path>, ignore: &[String]) -> Result<()> {
     }
     obj.insert(
         "ignore".into(),
-        serde_json::Value::Array(ignore.iter().map(|s| serde_json::Value::String(s.clone())).collect()),
+        serde_json::Value::Array(
+            app.default_ignore
+                .iter()
+                .map(|s| serde_json::Value::String(s.clone()))
+                .collect(),
+        ),
+    );
+    obj.insert("xattr".into(), serde_json::Value::Bool(app.xattr));
+    obj.insert(
+        "xattrIgnore".into(),
+        serde_json::Value::Array(
+            app.xattr_ignore
+                .iter()
+                .map(|s| serde_json::Value::String(s.clone()))
+                .collect(),
+        ),
     );
     let text = serde_json::to_string_pretty(&serde_json::Value::Object(obj))? + "\n";
     std::fs::write(&path, text).with_context(|| format!("写入配置失败: {}", path.display()))
