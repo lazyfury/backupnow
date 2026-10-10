@@ -1,5 +1,5 @@
 use crate::cli::PreviewArgs;
-use crate::commands::locate;
+use crate::commands::{find_libs, locate};
 use crate::git::Git;
 use anyhow::{bail, Context, Result};
 use std::path::Path;
@@ -69,7 +69,18 @@ pub fn refresh_if_exists(dest: &Path, name: &str, repo: &Path) -> Result<()> {
 }
 
 pub fn run(dest: &Path, a: PreviewArgs) -> Result<()> {
-    let (sf, repo) = locate(dest, &a.name)?;
+    if a.all {
+        if a.name.is_some() {
+            bail!("--all 与库名不能同时给出");
+        }
+        if a.to.is_some() {
+            bail!("--all 不能与 --to 同用（每个库输出到各自 previews/<name>）");
+        }
+        return preview_all(dest, &a);
+    }
+
+    let name = a.name.clone().context("缺少库名（或使用 --all）")?;
+    let (sf, repo) = locate(dest, &name)?;
     let target = a
         .to
         .clone()
@@ -78,5 +89,30 @@ pub fn run(dest: &Path, a: PreviewArgs) -> Result<()> {
     let n = export(&repo, &target, &rev)?;
     println!("✅ 预览已生成: {}", target.display());
     println!("   版本: {rev}  文件: {n} 个");
+    Ok(())
+}
+
+fn preview_all(dest: &Path, a: &PreviewArgs) -> Result<()> {
+    let libs = find_libs(dest, 1);
+    if libs.is_empty() {
+        bail!("{} 下没有备份库", dest.display());
+    }
+    let rev = a.rev.clone().unwrap_or_else(|| "HEAD".into());
+    let mut ok = 0;
+    let mut fail = 0;
+    for (sf, repo) in libs {
+        let target = dest.join("previews").join(&sf.name);
+        match export(&repo, &target, &rev) {
+            Ok(n) => {
+                ok += 1;
+                println!("✅ {} → {}（{n} 文件）", sf.name, target.display());
+            }
+            Err(e) => {
+                fail += 1;
+                eprintln!("❌ {}: {e:#}", sf.name);
+            }
+        }
+    }
+    println!("\n共 {ok} 个成功，{fail} 个失败。");
     Ok(())
 }

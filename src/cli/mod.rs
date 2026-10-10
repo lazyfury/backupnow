@@ -50,7 +50,11 @@ pub enum Command {
 
 #[derive(Args, Debug)]
 pub struct PreviewArgs {
-    pub name: String,
+    /// 库名（省略时需配合 --all）
+    pub name: Option<String>,
+    /// 为根下所有库生成预览
+    #[arg(long)]
+    pub all: bool,
     /// 版本（默认 HEAD）
     #[arg(long)]
     pub rev: Option<String>,

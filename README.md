@@ -249,6 +249,7 @@ bare 仓库在 Finder 里看不到文件。`preview` 把某个版本导出成一
 
 ```bash
 backupnow preview pi                  # → <dest>/previews/pi/（默认 HEAD）
+backupnow preview --all               # 为根下所有库生成预览
 backupnow preview pi --rev <commit>   # 导出指定版本
 backupnow preview pi --to /tmp/see    # 导出到别处
 ```
