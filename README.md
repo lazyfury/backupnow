@@ -50,6 +50,20 @@ cd backupnow && cargo install --path .
 
 > 中国大陆网络可先设代理：`export all_proxy=http://127.0.0.1:7890`（`cargo` 走 git 协议时同样需要）。
 
+## 更新
+
+```bash
+backupnow update              # cargo install --git ... --force
+backupnow update --check      # 只看远端有没有新提交（git ls-remote）
+backupnow update --git <url> --branch <b>
+```
+
+`--version` 带构建信息：
+
+```
+backupnow 0.1.0 (aarch64-apple-darwin, 2026-10-10T21:04:37Z, 28a3dfe)
+```
+
 ## 用法
 
 ```bash
@@ -96,6 +110,7 @@ backupnow completions zsh > ~/.zfunc/_backupnow
 backupnow man --out ~/.local/share/man/man1
 backupnow open pi
 backupnow preview pi                 # 导出成可见目录（预览）
+backupnow update                     # 自更新
 ```
 
 忽略预设：`macos` / `xcode` / `node` / `python` / `rust`（可逗号组合）。

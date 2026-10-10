@@ -4,7 +4,7 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 #[command(
     name = "backupnow",
-    version,
+    version = crate::version::VERSION,
     about = "把目录用 git 备份到外置盘（bare 仓库 + 自描述清单）"
 )]
 pub struct Cli {
@@ -46,6 +46,21 @@ pub enum Command {
     Open(OpenArgs),
     /// 把库导出成可见目录（预览）
     Preview(PreviewArgs),
+    /// 自更新（cargo install --git）
+    Update(UpdateArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct UpdateArgs {
+    /// 覆盖 git 仓库地址
+    #[arg(long, default_value = "https://github.com/lazyfury/backupnow")]
+    pub git: String,
+    /// 分支/标签
+    #[arg(long)]
+    pub branch: Option<String>,
+    /// 只检查远端是否有更新
+    #[arg(long)]
+    pub check: bool,
 }
 
 #[derive(Args, Debug)]

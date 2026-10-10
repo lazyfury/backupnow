@@ -4,6 +4,7 @@ mod config;
 mod git;
 mod meta;
 mod platform;
+mod version;
 
 use clap::Parser;
 use cli::{Cli, Command};
@@ -45,5 +46,6 @@ fn run() -> anyhow::Result<()> {
         Command::Man(a) => commands::man::run(a),
         Command::Open(a) => commands::open::run(&dest, a),
         Command::Preview(a) => commands::preview::run(&dest, a),
+        Command::Update(a) => commands::update::run(a),
     }
 }

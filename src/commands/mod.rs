@@ -12,6 +12,7 @@ pub mod restore;
 pub mod save;
 pub mod status;
 pub mod timer;
+pub mod update;
 
 use crate::config::{SyncFile, SYNC_FILE};
 use crate::git::Git;
