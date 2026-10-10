@@ -1,20 +1,66 @@
 use crate::cli::RestoreArgs;
-use crate::commands::locate;
+use crate::commands::{find_libs, locate};
 use crate::config::SyncFile;
 use crate::git::{self, Git};
 use crate::meta;
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 pub fn run(dest: &Path, a: RestoreArgs) -> Result<()> {
-    let (sf, repo) = locate(dest, &a.name)?;
+    if a.all {
+        if a.name.is_some() {
+            bail!("--all 与库名不能同时给出");
+        }
+        if a.to.is_some() {
+            bail!("--all 不能与 --to 同用（每个库恢复到各自的 restoreDir）");
+        }
+        return restore_all(dest, &a);
+    }
+
+    let name = a.name.clone().context("缺少库名（或使用 --all）")?;
+    let (sf, repo) = locate(dest, &name)?;
     let target: PathBuf = a.to.clone().unwrap_or_else(|| sf.resolved_restore_dir());
 
     if sf.mode == "mirror" {
-        return restore_mirror(&sf, &repo, &target, &a);
+        restore_mirror(&sf, &repo, &target, &a)
+    } else {
+        restore_snapshot(&sf, &repo, &target, &a)
     }
-    restore_snapshot(&sf, &repo, &target, &a)
+}
+
+fn restore_all(dest: &Path, a: &RestoreArgs) -> Result<()> {
+    let libs = find_libs(dest, 1);
+    if libs.is_empty() {
+        bail!("{} 下没有备份库", dest.display());
+    }
+    let mut ok = 0;
+    let mut fail = 0;
+    for (sf, repo) in libs {
+        let target = sf.resolved_restore_dir();
+        let sub = RestoreArgs {
+            name: Some(sf.name.clone()),
+            all: false,
+            to: Some(target.clone()),
+            rev: a.rev.clone(),
+            path: a.path.clone(),
+            force: a.force,
+        };
+        let r = if sf.mode == "mirror" {
+            restore_mirror(&sf, &repo, &target, &sub)
+        } else {
+            restore_snapshot(&sf, &repo, &target, &sub)
+        };
+        match r {
+            Ok(()) => ok += 1,
+            Err(e) => {
+                eprintln!("❌ {}: {e:#}", sf.name);
+                fail += 1;
+            }
+        }
+    }
+    println!("\n共 {ok} 个成功，{fail} 个失败。");
+    Ok(())
 }
 
 /// 从备份仓库读 xattr note 并写回 target

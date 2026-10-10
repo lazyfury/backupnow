@@ -114,6 +114,9 @@ pub struct InitArgs {
 pub struct ListArgs {
     /// 直接指定备份根（默认用 --dest / 配置 / 编译默认）
     pub path: Option<PathBuf>,
+    /// 扫描所有挂载卷寻找备份库
+    #[arg(long)]
+    pub drives: bool,
     /// 以 JSON 输出
     #[arg(long)]
     pub json: bool,
@@ -148,7 +151,11 @@ pub struct LogArgs {
 
 #[derive(Args, Debug)]
 pub struct RestoreArgs {
-    pub name: String,
+    /// 库名（省略时需配合 --all）
+    pub name: Option<String>,
+    /// 恢复根目录下所有库（到各自 restoreDir）
+    #[arg(long)]
+    pub all: bool,
     /// 恢复目标（默认用清单里的 restoreDir）
     #[arg(long)]
     pub to: Option<PathBuf>,

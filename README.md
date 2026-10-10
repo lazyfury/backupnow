@@ -72,6 +72,8 @@ backupnow log pi -n 10
 # 恢复（默认回到清单里的 restoreDir）
 backupnow restore pi
 backupnow restore pi --to /tmp/restore --rev <commit> --path sub --force
+backupnow restore --all --dest /Volumes/数据/Backups   # 恢复根下所有库
+backupnow list --drives                                 # 扫描所有挂载卷找库
 
 # 忽略规则
 backupnow ignore pi list
@@ -151,7 +153,13 @@ backupnow restore /Volumes/数据/Backups/pi.git      # 也可给根目录（库
 backupnow config set-dest /Volumes/数据/Backups
 backupnow list
 backupnow restore pi
+
+# 方式三：一次恢复盘上所有库（新机初始化）
+backupnow list --drives                       # 先看看哪些卷上有库
+backupnow restore --all --dest /Volumes/数据/Backups
 ```
+
+`list` 会在源路径不存在时提示本机可恢复到的位置（`旧路径 → 新家目录`）。
 
 **家目录自动适配**：`restore` 的默认目标优先用清单里的 `pathTemplate`（`{HOME}/.pi`）。
 同机上 `restoreDir` 存在就用它；换机器/换用户名（旧路径不存在）时自动落到新机器的 `$HOME`。

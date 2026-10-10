@@ -71,6 +71,43 @@ fn resolve_repo(dest: &Path, name: &str) -> Result<PathBuf> {
     bail!("不是有效的库路径: {name}");
 }
 
+/// 在 root 下按深度扫描备份库（返回 清单 + 仓库目录）
+pub fn find_libs(root: &Path, depth: usize) -> Vec<(SyncFile, PathBuf)> {
+    let mut out: Vec<(SyncFile, PathBuf)> = Vec::new();
+    walk_libs(root, depth, &mut out);
+    out.sort_by(|a, b| a.0.name.cmp(&b.0.name));
+    out
+}
+
+fn walk_libs(dir: &Path, remaining: usize, out: &mut Vec<(SyncFile, PathBuf)>) {
+    if remaining == 0 {
+        return;
+    }
+    let rd = match std::fs::read_dir(dir) {
+        Ok(r) => r,
+        Err(_) => return,
+    };
+    for e in rd.flatten() {
+        let p = e.path();
+        if !p.is_dir() {
+            continue;
+        }
+        let manifest = p.join(SYNC_FILE);
+        if manifest.exists() {
+            if let Ok(sf) = SyncFile::load(&manifest) {
+                out.push((sf, p.clone()));
+            }
+            continue;
+        }
+        // 不深入隐藏目录 / 版本目录
+        let name = e.file_name().to_string_lossy().to_string();
+        if name.starts_with('.') {
+            continue;
+        }
+        walk_libs(&p, remaining - 1, out);
+    }
+}
+
 /// 合并默认忽略 + 已有规则，去重保持顺序
 pub fn merge_ignore(defaults: &[String], current: &[String]) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
