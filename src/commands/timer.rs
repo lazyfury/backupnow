@@ -100,6 +100,7 @@ pub fn run(app: &AppConfig, dest: &Path, a: TimerArgs) -> Result<()> {
                 SaveArgs {
                     name,
                     message: None,
+                    quiet: false,
                 },
             )?;
         }

@@ -15,6 +15,8 @@ pub struct AppConfig {
     pub xattr: bool,
     /// 要忽略的 xattr 名
     pub xattr_ignore: Vec<String>,
+    /// 是否发系统通知
+    pub notify: bool,
 }
 
 impl AppConfig {
@@ -23,6 +25,7 @@ impl AppConfig {
         let mut ignore: Vec<String> = DEFAULT_IGNORE.iter().map(|s| s.to_string()).collect();
         let mut xattr = true;
         let mut xattr_ignore: Vec<String> = Vec::new();
+        let mut notify = true;
 
         if let Some(path) = config_file_path() {
             if let Ok(text) = std::fs::read_to_string(&path) {
@@ -41,6 +44,9 @@ impl AppConfig {
                     }
                     if let Some(b) = v.get("xattr").and_then(|x| x.as_bool()) {
                         xattr = b;
+                    }
+                    if let Some(b) = v.get("notify").and_then(|x| x.as_bool()) {
+                        notify = b;
                     }
                     if let Some(arr) = v.get("xattrIgnore").and_then(|x| x.as_array()) {
                         xattr_ignore = arr
@@ -66,6 +72,7 @@ impl AppConfig {
             default_ignore: ignore,
             xattr,
             xattr_ignore,
+            notify,
         }
     }
 }
@@ -96,6 +103,7 @@ pub fn write_config_file(dest: Option<&Path>, app: &AppConfig) -> Result<()> {
         ),
     );
     obj.insert("xattr".into(), serde_json::Value::Bool(app.xattr));
+    obj.insert("notify".into(), serde_json::Value::Bool(app.notify));
     obj.insert(
         "xattrIgnore".into(),
         serde_json::Value::Array(

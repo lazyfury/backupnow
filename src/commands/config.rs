@@ -13,6 +13,7 @@ pub fn run(app: &AppConfig, a: ConfigArgs) -> Result<()> {
             println!("备份根    : {}", app.dest.display());
             println!("默认忽略  : {}", app.default_ignore.join(", "));
             println!("xattr     : {}", if app.xattr { "开启" } else { "关闭" });
+            println!("通知      : {}", if app.notify { "开启" } else { "关闭" });
             if !app.xattr_ignore.is_empty() {
                 println!("忽略 xattr: {}", app.xattr_ignore.join(", "));
             }
@@ -26,16 +27,27 @@ pub fn run(app: &AppConfig, a: ConfigArgs) -> Result<()> {
             println!("✅ 已清除默认备份根（回退到 $BACKUPNOW_DEST / 编译默认）");
         }
         ConfigAction::SetXattr { value } => {
-            let on = match value.as_str() {
-                "on" | "true" | "1" | "yes" => true,
-                "off" | "false" | "0" | "no" => false,
-                _ => bail!("参数应为 on/off，收到: {value}"),
-            };
+            let on = parse_bool(&value)?;
             let mut next = app.clone();
             next.xattr = on;
             write_config_file(Some(&app.dest), &next)?;
             println!("✅ xattr 采集/还原已{}", if on { "开启" } else { "关闭" });
         }
+        ConfigAction::SetNotify { value } => {
+            let on = parse_bool(&value)?;
+            let mut next = app.clone();
+            next.notify = on;
+            write_config_file(Some(&app.dest), &next)?;
+            println!("✅ 系统通知已{}", if on { "开启" } else { "关闭" });
+        }
     }
     Ok(())
+}
+
+fn parse_bool(value: &str) -> Result<bool> {
+    match value {
+        "on" | "true" | "1" | "yes" => Ok(true),
+        "off" | "false" | "0" | "no" => Ok(false),
+        _ => bail!("参数应为 on/off，收到: {value}"),
+    }
 }

@@ -2,10 +2,31 @@ use crate::cli::SaveArgs;
 use crate::commands::{locate, merge_ignore, sync_xattr_note};
 use crate::config::{AppConfig, SyncFile};
 use crate::git::{self, Git};
+use crate::platform::notify;
 use anyhow::{bail, Result};
 use std::path::{Path, PathBuf};
 
+/// 一次 save 的结果摘要（用于通知）
+pub struct Outcome {
+    pub detail: String,
+}
+
 pub fn run(app: &AppConfig, dest: &Path, a: SaveArgs) -> Result<()> {
+    let name = a.name.clone();
+    let quiet = a.quiet;
+    let result = run_inner(app, dest, a);
+
+    if app.notify && !quiet {
+        match &result {
+            Ok(o) => notify::notify(&format!("backupnow · {name}"), &o.detail),
+            Err(e) => notify::notify(&format!("backupnow 失败 · {name}"), &format!("{e:#}")),
+        }
+    }
+
+    result.map(|_| ())
+}
+
+fn run_inner(app: &AppConfig, dest: &Path, a: SaveArgs) -> Result<Outcome> {
     let (mut sf, repo) = locate(dest, &a.name)?;
     let source = PathBuf::from(&sf.source.path);
     if !source.is_dir() {
@@ -26,7 +47,7 @@ fn save_snapshot(
     repo: &Path,
     source: &Path,
     a: &SaveArgs,
-) -> Result<()> {
+) -> Result<Outcome> {
     let g = Git::worktree(repo, source);
 
     // 校准忽略规则
@@ -85,25 +106,33 @@ fn save_snapshot(
     let _ = g.run(&["gc", "--auto"]);
 
     let short = &head[..head.len().min(7)];
-    if has_changes {
+    let xa = if xattr_updated { "（xattr 已更新）" } else { "" };
+
+    let detail = if has_changes {
         println!("✅ 已保存 `{}` → {short}", sf.name);
         if removed > 0 {
             println!("   取消跟踪被忽略文件: {removed} 个");
         }
+        if xattr_updated {
+            println!("   已更新 xattr 清单");
+        }
+        format!("已保存 → {short}{xa}")
     } else {
         println!("没有变化，跳过。");
         if removed > 0 {
             println!("（取消了 {removed} 个被忽略文件的跟踪）");
         }
-    }
-    if xattr_updated {
-        println!("   已更新 xattr 清单");
-    }
-    Ok(())
+        if xattr_updated {
+            println!("   已更新 xattr 清单");
+        }
+        format!("没有变化{xa}")
+    };
+
+    Ok(Outcome { detail })
 }
 
 /// mirror：把源仓库的所有 refs 拉取到盘上镜像
-fn save_mirror(app: &AppConfig, sf: &SyncFile, repo: &Path, source: &Path) -> Result<()> {
+fn save_mirror(app: &AppConfig, sf: &SyncFile, repo: &Path, source: &Path) -> Result<Outcome> {
     let dirty = git::dirty_count(source);
     if dirty > 0 {
         eprintln!("⚠️  源仓库有 {dirty} 处未提交改动，不会被备份（mirror 只备份已提交内容）");
@@ -129,13 +158,16 @@ fn save_mirror(app: &AppConfig, sf: &SyncFile, repo: &Path, source: &Path) -> Re
         .lines()
         .count();
 
-    if before == after {
+    let detail = if before == after {
         println!("没有变化（{refs} 个 ref）。");
+        format!("没有变化（{refs} 个 ref）")
     } else {
         println!("✅ 已镜像 `{}`（{refs} 个 ref）", sf.name);
-    }
+        format!("已镜像 {refs} 个 ref")
+    };
     if xattr_updated {
         println!("   已更新 xattr 清单");
     }
-    Ok(())
+
+    Ok(Outcome { detail })
 }

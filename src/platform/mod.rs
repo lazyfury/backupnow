@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 #[cfg(target_os = "macos")]
 pub mod macos;
+pub mod notify;
 
 /// 调度方式（与平台无关的描述）
 #[derive(Debug, Clone)]

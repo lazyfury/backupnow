@@ -88,6 +88,8 @@ pub enum ConfigAction {
     UnsetDest,
     /// 开关 xattr 采集/还原（on/off）
     SetXattr { value: String },
+    /// 开关系统通知（on/off）
+    SetNotify { value: String },
 }
 
 #[derive(Args, Debug)]
@@ -128,6 +130,9 @@ pub struct SaveArgs {
     /// 提交信息
     #[arg(short, long)]
     pub message: Option<String>,
+    /// 本次不发系统通知
+    #[arg(long)]
+    pub quiet: bool,
 }
 
 #[derive(Args, Debug)]

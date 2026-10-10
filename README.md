@@ -123,7 +123,8 @@ macOS 的 Finder 彩色标签、quarantine、资源叉等都在 xattr 里，git 
   "dest": "/Volumes/数据/Backups",
   "ignore": [".DS_Store", "agent/install", "node_modules", "agent/sessions"],
   "xattr": true,
-  "xattrIgnore": []
+  "xattrIgnore": [],
+  "notify": true
 }
 ```
 
@@ -133,6 +134,7 @@ macOS 的 Finder 彩色标签、quarantine、资源叉等都在 xattr 里，git 
 backupnow config show                 # 查看配置文件路径与当前解析结果
 backupnow config set-dest /Volumes/数据/Backups   # 持久化默认根
 backupnow config set-xattr off        # 关闭 xattr 采集/还原
+backupnow config set-notify off       # 关闭系统通知
 backupnow config unset-dest
 ```
 
@@ -179,6 +181,17 @@ backupnow restore pi
 ```
 
 `pathTemplate` 让换机器/换用户名也能算出恢复路径。
+
+## 通知
+
+`save`（包括定时任务触发的）结束时发 macOS 系统通知：成功显示结果摘要，失败显示错误。
+
+```bash
+backupnow config set-notify off     # 全局关闭
+backupnow save pi --quiet           # 仅本次不发
+```
+
+实现见 `src/platform/notify.rs`（macOS 走 `osascript display notification`，其它平台 no-op）。
 
 ## 定时任务
 
