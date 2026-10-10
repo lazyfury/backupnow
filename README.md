@@ -73,6 +73,7 @@ backupnow log pi -n 10
 # 恢复（默认回到清单里的 restoreDir）
 backupnow restore pi
 backupnow restore pi --to /tmp/restore --rev <commit> --path sub --force
+backupnow restore pi --snapshot-first                   # 覆盖前先建本地 APFS 快照
 backupnow restore --all --dest /Volumes/数据/Backups   # 恢复根下所有库
 backupnow list --drives                                 # 扫描所有挂载卷找库
 
@@ -96,6 +97,8 @@ backupnow open pi
 ```
 
 忽略预设：`macos` / `xcode` / `node` / `python` / `rust`（可逗号组合）。
+
+`doctor` 会检查仓库/清单/源/忽略一致性/xattr，并报告 **全盘访问(FDA)**、**仅大小写不同的路径**、**iCloud 未下载文件**等 macOS 特有问题。
 
 ## 忽略规则
 
