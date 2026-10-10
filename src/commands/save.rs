@@ -1,9 +1,9 @@
 use crate::cli::SaveArgs;
-use crate::commands::{locate, merge_ignore, sync_xattr_note};
+use crate::commands::{find_libs, locate, merge_ignore, sync_xattr_note};
 use crate::config::{AppConfig, SyncFile};
 use crate::git::{self, Git};
 use crate::platform::notify;
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 
 /// 一次 save 的结果摘要（用于通知）
@@ -12,22 +12,73 @@ pub struct Outcome {
 }
 
 pub fn run(app: &AppConfig, dest: &Path, a: SaveArgs) -> Result<()> {
-    let name = a.name.clone();
-    let quiet = a.quiet;
-    let result = run_inner(app, dest, a);
+    if a.all {
+        if a.name.is_some() {
+            bail!("--all 与库名不能同时给出");
+        }
+        return save_all(app, dest, &a);
+    }
+    let name = a.name.clone().context("缺少库名（或使用 --all）")?;
+    save_one(app, dest, &name, &a)
+}
 
-    if app.notify && !quiet {
+fn save_one(app: &AppConfig, dest: &Path, name: &str, a: &SaveArgs) -> Result<()> {
+    let result = run_inner(app, dest, name, a);
+    if app.notify && !a.quiet {
         match &result {
             Ok(o) => notify::notify(&format!("backupnow · {name}"), &o.detail),
             Err(e) => notify::notify(&format!("backupnow 失败 · {name}"), &format!("{e:#}")),
         }
     }
-
     result.map(|_| ())
 }
 
-fn run_inner(app: &AppConfig, dest: &Path, a: SaveArgs) -> Result<Outcome> {
-    let (mut sf, repo) = locate(dest, &a.name)?;
+fn save_all(app: &AppConfig, dest: &Path, a: &SaveArgs) -> Result<()> {
+    let libs = find_libs(dest, 1);
+    if libs.is_empty() {
+        bail!("{} 下没有备份库", dest.display());
+    }
+
+    let mut ok = 0;
+    let mut fail = 0;
+    let mut details: Vec<String> = Vec::new();
+
+    for (sf, _repo) in libs {
+        let name = sf.name.clone();
+        let sub = SaveArgs {
+            name: Some(name.clone()),
+            all: false,
+            message: a.message.clone(),
+            quiet: true,
+            dry_run: a.dry_run,
+        };
+        match run_inner(app, dest, &name, &sub) {
+            Ok(o) => {
+                ok += 1;
+                details.push(format!("{name}: {}", o.detail));
+            }
+            Err(e) => {
+                fail += 1;
+                eprintln!("❌ {name}: {e:#}");
+                details.push(format!("{name}: 失败"));
+            }
+        }
+    }
+
+    println!("\n共 {ok} 个成功，{fail} 个失败。");
+    if app.notify && !a.quiet {
+        let title = if fail == 0 {
+            format!("backupnow · 全部（{ok} 个）")
+        } else {
+            format!("backupnow · 全部（{ok} 成功 {fail} 失败）")
+        };
+        notify::notify(&title, &details.join("\n"));
+    }
+    Ok(())
+}
+
+fn run_inner(app: &AppConfig, dest: &Path, name: &str, a: &SaveArgs) -> Result<Outcome> {
+    let (mut sf, repo) = locate(dest, name)?;
     let source = PathBuf::from(&sf.source.path);
     if !source.is_dir() {
         bail!("源目录不存在: {}", source.display());
@@ -36,7 +87,7 @@ fn run_inner(app: &AppConfig, dest: &Path, a: SaveArgs) -> Result<Outcome> {
     if sf.mode == "mirror" {
         save_mirror(app, &sf, &repo, &source, a.dry_run)
     } else {
-        save_snapshot(app, &mut sf, &repo, &source, &a)
+        save_snapshot(app, &mut sf, &repo, &source, a)
     }
 }
 

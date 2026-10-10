@@ -66,6 +66,7 @@ backupnow status pi
 
 # 快照提交（add -A + 处理忽略 + commit）
 backupnow save pi -m "改了点东西"
+backupnow save --all                 # 一次备份根下所有库
 
 # 历史
 backupnow log pi -n 10
@@ -222,6 +223,7 @@ backupnow save pi --quiet           # 仅本次不发
 
 ```bash
 backupnow timer install pi --every 1h        # 固定间隔（默认 1h）
+backupnow timer install --all --every 1h     # 一个任务覆盖全部库
 backupnow timer install pi --daily 03:00     # 每天某时刻
 backupnow timer install pi --on-mount        # 盘挂载时触发
 backupnow timer install pi --on-volume /Volumes/数据   # 指定卷挂载时

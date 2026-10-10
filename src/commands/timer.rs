@@ -1,34 +1,52 @@
 use crate::cli::{SaveArgs, TimerAction, TimerArgs};
-use crate::commands::{locate, save};
+use crate::commands::{find_libs, locate, save};
 use crate::config::AppConfig;
 use crate::platform::{self, JobSpec, JobStatus, Schedule};
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use std::path::Path;
 
 pub fn run(app: &AppConfig, dest: &Path, a: TimerArgs) -> Result<()> {
     match a.action {
         TimerAction::Install {
             name,
+            all,
             every,
             daily,
             on_mount,
             on_volume,
             skip_on_battery,
         } => {
-            let (sf, _repo) = locate(dest, &name)?;
+            if all && name.is_some() {
+                bail!("--all 与库名不能同时给出");
+            }
+            let job_name = if all {
+                if find_libs(dest, 1).is_empty() {
+                    bail!("{} 下没有备份库", dest.display());
+                }
+                "all".to_string()
+            } else {
+                let n = name.context("缺少库名（或使用 --all）")?;
+                locate(dest, &n)?.0.name
+            };
+
             let schedule = build_schedule(every, daily, on_mount, on_volume)?;
             let binary = std::env::current_exe().context("无法确定自身可执行文件路径")?;
             let job = JobSpec {
-                name: sf.name.clone(),
+                name: job_name.clone(),
                 dest: dest.to_path_buf(),
                 binary,
                 schedule: schedule.clone(),
                 allow_battery: !skip_on_battery,
+                all,
             };
             let sched = platform::scheduler();
             sched.install(&job)?;
 
-            println!("✅ 已安装定时任务 `{}`（后端: {}）", sf.name, sched.platform());
+            println!(
+                "✅ 已安装定时任务 `{job_name}`（后端: {}）",
+                sched.platform()
+            );
+            println!("   范围     : {}", if all { "全部库" } else { "单个库" });
             println!("   调度     : {}", schedule.describe());
             println!(
                 "   电源     : {}",
@@ -38,12 +56,7 @@ pub fn run(app: &AppConfig, dest: &Path, a: TimerArgs) -> Result<()> {
                     "不限"
                 }
             );
-            println!(
-                "   命令     : backupnow timer run {} --dest {}",
-                sf.name,
-                dest.display()
-            );
-            if let Some(hint) = sched.log_hint(&sf.name) {
+            if let Some(hint) = sched.log_hint(&job_name) {
                 println!("   日志     : {hint}");
             }
         }
@@ -97,30 +110,49 @@ pub fn run(app: &AppConfig, dest: &Path, a: TimerArgs) -> Result<()> {
         }
         TimerAction::Run {
             name,
+            all,
             allow_battery,
         } => {
             if !allow_battery && on_battery() {
-                eprintln!(
-                    "[{}] 电池供电，跳过 `{name}`（--allow-battery 可强制）",
-                    now()
-                );
+                eprintln!("[{}] 电池供电，跳过（--allow-battery 可强制）", now());
                 return Ok(());
             }
-            if locate(dest, &name).is_err() {
-                eprintln!("[{}] 备份根不可用（盘未挂载？），跳过 `{name}`。", now());
-                return Ok(());
+            if all {
+                if find_libs(dest, 1).is_empty() {
+                    eprintln!("[{}] 备份根无可用库（盘未挂载？），跳过。", now());
+                    return Ok(());
+                }
+                eprintln!("[{}] 开始备份全部库", now());
+                save::run(
+                    app,
+                    dest,
+                    SaveArgs {
+                        name: None,
+                        all: true,
+                        message: None,
+                        quiet: false,
+                        dry_run: false,
+                    },
+                )?;
+            } else {
+                let n = name.context("缺少库名（或使用 --all）")?;
+                if locate(dest, &n).is_err() {
+                    eprintln!("[{}] 备份根不可用（盘未挂载？），跳过 `{n}`。", now());
+                    return Ok(());
+                }
+                eprintln!("[{}] 开始备份 `{n}`", now());
+                save::run(
+                    app,
+                    dest,
+                    SaveArgs {
+                        name: Some(n),
+                        all: false,
+                        message: None,
+                        quiet: false,
+                        dry_run: false,
+                    },
+                )?;
             }
-            eprintln!("[{}] 开始备份 `{name}`", now());
-            save::run(
-                app,
-                dest,
-                SaveArgs {
-                    name,
-                    message: None,
-                    quiet: false,
-                    dry_run: false,
-                },
-            )?;
         }
     }
     Ok(())

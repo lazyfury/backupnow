@@ -151,10 +151,14 @@ fn plist_xml(job: &JobSpec, out_log: &std::path::Path, err_log: &std::path::Path
             job.binary.to_string_lossy().to_string(),
             "timer".to_string(),
             "run".to_string(),
-            job.name.clone(),
-            "--dest".to_string(),
-            job.dest.to_string_lossy().to_string(),
         ];
+        if job.all {
+            v.push("--all".to_string());
+        } else {
+            v.push(job.name.clone());
+        }
+        v.push("--dest".to_string());
+        v.push(job.dest.to_string_lossy().to_string());
         if job.allow_battery {
             v.push("--allow-battery".to_string());
         }

@@ -74,7 +74,11 @@ pub struct TimerArgs {
 pub enum TimerAction {
     /// 安装定时任务（默认 --every 1h）
     Install {
-        name: String,
+        /// 库名（省略时需配合 --all）
+        name: Option<String>,
+        /// 为该备份根下所有库安装一个任务
+        #[arg(long)]
+        all: bool,
         /// 固定间隔，如 30m / 1h / 3600s
         #[arg(long, conflicts_with_all = ["daily", "on_mount", "on_volume"])]
         every: Option<String>,
@@ -100,7 +104,11 @@ pub enum TimerAction {
     /// 内部入口：由调度器调用（含挂载/电源检查）
     #[command(hide = true)]
     Run {
-        name: String,
+        /// 库名（省略时需配合 --all）
+        name: Option<String>,
+        /// 备份所有库
+        #[arg(long)]
+        all: bool,
         /// 电池供电时也运行
         #[arg(long)]
         allow_battery: bool,
@@ -167,7 +175,11 @@ pub struct StatusArgs {
 
 #[derive(Args, Debug)]
 pub struct SaveArgs {
-    pub name: String,
+    /// 库名（省略时需配合 --all）
+    pub name: Option<String>,
+    /// 备份根下所有库
+    #[arg(long)]
+    pub all: bool,
     /// 提交信息
     #[arg(short, long)]
     pub message: Option<String>,

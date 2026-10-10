@@ -38,6 +38,8 @@ pub struct JobSpec {
     pub schedule: Schedule,
     /// 是否允许电池下运行（写入 plist 的 --allow-battery）
     pub allow_battery: bool,
+    /// 是否备份所有库（plist 用 --all）
+    pub all: bool,
 }
 
 impl JobSpec {
