@@ -36,6 +36,40 @@ pub enum Command {
     Doctor(DoctorArgs),
     /// 查看/修改应用配置
     Config(ConfigArgs),
+    /// 定时任务（平台后端：macOS/launchd）
+    Timer(TimerArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct TimerArgs {
+    #[command(subcommand)]
+    pub action: TimerAction,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum TimerAction {
+    /// 安装定时任务（默认 --every 1h）
+    Install {
+        name: String,
+        /// 固定间隔，如 30m / 1h / 3600s
+        #[arg(long, conflicts_with_all = ["daily", "on_mount"])]
+        every: Option<String>,
+        /// 每天某时刻，如 03:00
+        #[arg(long, conflicts_with_all = ["every", "on_mount"])]
+        daily: Option<String>,
+        /// 盘挂载时触发
+        #[arg(long, conflicts_with_all = ["every", "daily"])]
+        on_mount: bool,
+    },
+    /// 卸载定时任务
+    Uninstall { name: String },
+    /// 查看某个任务状态
+    Status { name: String },
+    /// 列出所有任务
+    List,
+    /// 内部入口：由调度器调用（含挂载检查）
+    #[command(hide = true)]
+    Run { name: String },
 }
 
 #[derive(Args, Debug)]

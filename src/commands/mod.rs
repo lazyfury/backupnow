@@ -7,6 +7,7 @@ pub mod log;
 pub mod restore;
 pub mod save;
 pub mod status;
+pub mod timer;
 
 use crate::config::{SyncFile, SYNC_FILE};
 use anyhow::{bail, Result};

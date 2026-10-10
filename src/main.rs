@@ -2,6 +2,7 @@ mod cli;
 mod commands;
 mod config;
 mod git;
+mod platform;
 
 use clap::Parser;
 use cli::{Cli, Command};
@@ -38,5 +39,6 @@ fn run() -> anyhow::Result<()> {
         Command::Ignore(a) => commands::ignore::run(&dest, a),
         Command::Doctor(a) => commands::doctor::run(&app, &dest, a),
         Command::Config(a) => commands::config::run(&app, a),
+        Command::Timer(a) => commands::timer::run(&app, &dest, a),
     }
 }

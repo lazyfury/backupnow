@@ -150,6 +150,25 @@ backupnow restore pi
 
 `pathTemplate` 让换机器/换用户名也能算出恢复路径。
 
+## 定时任务
+
+平台后端**可替换**：macOS 用 launchd（`com.backupnow.timer.<name>` LaunchAgent）；其它平台走 `UnsupportedScheduler`（提示暂不支持）。加 Linux/Windows 只需实现 `platform::Scheduler` trait。
+
+```bash
+backupnow timer install pi --every 1h        # 固定间隔（默认 1h）
+backupnow timer install pi --daily 03:00     # 每天某时刻
+backupnow timer install pi --on-mount        # 盘挂载时触发
+backupnow timer list
+backupnow timer status pi
+backupnow timer uninstall pi
+```
+
+调度器实际执行：`backupnow timer run <name> --dest <root>`
+
+- **盘未挂载时安静跳过**（exit 0，不算失败）
+- 输出写到 `~/Library/Logs/backupnow/<name>.{out,err}.log`
+- 手动立即触发一次（调试用）：`launchctl kickstart -k gui/$(id -u)/com.backupnow.timer.<name>`
+
 ## FAQ
 
 **我在源仓库里 `git commit` / `git push`，会影响 backupnow 同步吗？**
@@ -206,5 +225,6 @@ src/
 ├── cli/          参数解析
 ├── config/       清单与应用配置
 ├── git/          git 命令封装
-└── commands/     init / save / list / status / log / restore / ignore / doctor
+├── platform/     调度后端抽象（Scheduler trait + macOS/launchd 实现）
+└── commands/     init / save / list / status / log / restore / ignore / doctor / config / timer
 ```
