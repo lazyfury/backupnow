@@ -212,6 +212,9 @@ pub struct RestoreArgs {
     /// 只预览，不写入
     #[arg(long)]
     pub dry_run: bool,
+    /// 覆盖前先建本地 APFS 快照（tmutil localsnapshot）
+    #[arg(long)]
+    pub snapshot_first: bool,
 }
 
 #[derive(Args, Debug)]

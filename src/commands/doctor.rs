@@ -121,6 +121,68 @@ pub fn run(_app: &AppConfig, dest: &Path, a: DoctorArgs) -> Result<()> {
         }
     }
 
+    // 诊断
+    if Path::new(&sf.source.path).is_dir() {
+        let files = if sf.mode == "mirror" {
+            git::repo_ls_files(Path::new(&sf.source.path)).unwrap_or_default()
+        } else {
+            Git::worktree(&repo, &sf.source.path)
+                .ls_files()
+                .unwrap_or_default()
+        };
+
+        // 仅大小写不同的路径（APFS 默认不敏感）
+        let mut seen: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+        let mut collisions = 0;
+        for f in &files {
+            let lower = f.to_lowercase();
+            match seen.get(&lower) {
+                Some(prev) if prev != f => collisions += 1,
+                Some(_) => {}
+                None => {
+                    seen.insert(lower, f.clone());
+                }
+            }
+        }
+        if collisions > 0 {
+            println!("⚠️  有 {collisions} 组路径仅大小写不同（APFS 默认不敏感，可能出错）");
+        }
+
+        // iCloud 未下载文件
+        #[cfg(target_os = "macos")]
+        {
+            use std::os::macos::fs::MetadataExt;
+            const SF_DATALESS: u32 = 0x4000_0000;
+            let dataless = files
+                .iter()
+                .filter(|f| {
+                    std::fs::symlink_metadata(Path::new(&sf.source.path).join(f))
+                        .map(|m| m.st_flags() & SF_DATALESS != 0)
+                        .unwrap_or(false)
+                })
+                .count();
+            if dataless > 0 {
+                println!("⚠️  有 {dataless} 个 iCloud 未下载文件（读取会触发下载）");
+            }
+        }
+    }
+
+    // 全盘访问（以能否读 TCC.db 为代理）
+    #[cfg(target_os = "macos")]
+    if let Ok(home) = std::env::var("HOME") {
+        let tcc = Path::new(&home).join("Library/Application Support/com.apple.TCC/TCC.db");
+        let fda = std::fs::File::open(&tcc).is_ok();
+        println!(
+            "ℹ️  全盘访问(FDA): {}",
+            if fda {
+                "已授权"
+            } else {
+                "未授权（备份 ~/Library 等目录可能需要）"
+            }
+        );
+    }
+
     println!();
     if problems == 0 {
         println!("一切正常。");

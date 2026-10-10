@@ -46,6 +46,7 @@ fn restore_all(dest: &Path, a: &RestoreArgs) -> Result<()> {
             path: a.path.clone(),
             force: a.force,
             dry_run: a.dry_run,
+            snapshot_first: a.snapshot_first,
         };
         let r = if sf.mode == "mirror" {
             restore_mirror(&sf, &repo, &target, &sub)
@@ -64,6 +65,28 @@ fn restore_all(dest: &Path, a: &RestoreArgs) -> Result<()> {
     Ok(())
 }
 
+/// 覆盖前创建本地 APFS 快照（best-effort）
+#[cfg(target_os = "macos")]
+fn local_snapshot() {
+    match std::process::Command::new("tmutil")
+        .arg("localsnapshot")
+        .output()
+    {
+        Ok(o) if o.status.success() => {
+            let name = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            println!("   已创建本地 APFS 快照: {name}");
+        }
+        Ok(o) => eprintln!(
+            "⚠️  tmutil localsnapshot 失败: {}",
+            String::from_utf8_lossy(&o.stderr).trim()
+        ),
+        Err(e) => eprintln!("⚠️  无法执行 tmutil: {e}"),
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn local_snapshot() {}
+
 /// 从备份仓库读 xattr note 并写回 target
 fn apply_xattr(repo: &Path, target: &Path, commit: &str, sub: Option<&str>) -> Result<usize> {
     let g = Git::bare(repo);
@@ -81,6 +104,9 @@ fn apply_xattr(repo: &Path, target: &Path, commit: &str, sub: Option<&str>) -> R
 }
 
 fn restore_snapshot(sf: &SyncFile, repo: &Path, target: &Path, a: &RestoreArgs) -> Result<()> {
+    if a.snapshot_first {
+        local_snapshot();
+    }
     if a.dry_run {
         let g = Git::bare(repo);
         let rev = a.rev.clone().unwrap_or_else(|| "HEAD".into());
