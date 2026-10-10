@@ -1,0 +1,117 @@
+use anyhow::{bail, Context, Result};
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+
+pub fn ensure_git() -> Result<()> {
+    Command::new("git")
+        .arg("--version")
+        .output()
+        .map(|_| ())
+        .context("找不到 git，请先安装")
+}
+
+/// `git init --bare`，并把仓库标记为可配合显式 --work-tree 使用
+pub fn init_bare(repo: &Path) -> Result<()> {
+    let out = Command::new("git")
+        .args(["init", "--bare", "--initial-branch=main"])
+        .arg(repo)
+        .output()
+        .context("执行 git init --bare 失败")?;
+    if !out.status.success() {
+        bail!(
+            "git init --bare 失败: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    // 允许配合显式 --work-tree 执行 add/commit；不写 core.worktree，保持可 clone
+    let _ = Command::new("git")
+        .arg("--git-dir")
+        .arg(repo)
+        .args(["config", "core.bare", "false"])
+        .output();
+    Ok(())
+}
+
+/// 调用 git 的封装。work_tree 为 None 时只传 --git-dir（log/rev-parse 等用）。
+pub struct Git {
+    git_dir: PathBuf,
+    work_tree: Option<PathBuf>,
+}
+
+impl Git {
+    pub fn bare(git_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            git_dir: git_dir.into(),
+            work_tree: None,
+        }
+    }
+
+    pub fn worktree(git_dir: impl Into<PathBuf>, work_tree: impl Into<PathBuf>) -> Self {
+        Self {
+            git_dir: git_dir.into(),
+            work_tree: Some(work_tree.into()),
+        }
+    }
+
+    fn base(&self) -> Command {
+        let mut c = Command::new("git");
+        c.arg("--git-dir").arg(&self.git_dir);
+        if let Some(w) = &self.work_tree {
+            c.arg("--work-tree").arg(w);
+        }
+        c
+    }
+
+    pub fn run(&self, args: &[&str]) -> Result<String> {
+        let out = self
+            .base()
+            .args(args)
+            .output()
+            .with_context(|| format!("执行 git {} 失败", args.join(" ")))?;
+        if !out.status.success() {
+            bail!(
+                "git {} 失败 (exit {:?}): {}",
+                args.join(" "),
+                out.status.code(),
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    }
+
+    /// 返回是否成功（用于 --quiet 类判断）
+    pub fn success(&self, args: &[&str]) -> Result<bool> {
+        let out = self.base().args(args).output()?;
+        Ok(out.status.success())
+    }
+
+    pub fn run_with_stdin(&self, args: &[&str], input: &[u8]) -> Result<String> {
+        let mut child = self
+            .base()
+            .args(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .context("启动 git 失败")?;
+        child
+            .stdin
+            .as_mut()
+            .context("无法写入 git stdin")?
+            .write_all(input)?;
+        let out = child.wait_with_output()?;
+        if !out.status.success() {
+            bail!(
+                "git {} 失败: {}",
+                args.join(" "),
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    }
+
+    pub fn head_short(&self) -> Result<String> {
+        Ok(self.run(&["rev-parse", "--short", "HEAD"])?.trim().to_string())
+    }
+}
