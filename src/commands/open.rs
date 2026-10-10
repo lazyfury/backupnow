@@ -5,14 +5,19 @@ use std::path::Path;
 
 pub fn run(dest: &Path, a: OpenArgs) -> Result<()> {
     let (_sf, repo) = locate(dest, &a.name)?;
+
+    // 优先打开预览目录（若存在）
+    let preview = dest.join("previews").join(&a.name);
+    let target = if preview.is_dir() { preview } else { repo };
+
     #[cfg(target_os = "macos")]
     {
-        std::process::Command::new("open").arg(&repo).status()?;
-        println!("已在 Finder 打开: {}", repo.display());
+        std::process::Command::new("open").arg(&target).status()?;
+        println!("已在 Finder 打开: {}", target.display());
     }
     #[cfg(not(target_os = "macos"))]
     {
-        println!("{}", repo.display());
+        println!("{}", target.display());
     }
     Ok(())
 }

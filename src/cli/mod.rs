@@ -44,6 +44,19 @@ pub enum Command {
     Man(ManArgs),
     /// 在 Finder 打开盘上仓库
     Open(OpenArgs),
+    /// 把库导出成可见目录（预览）
+    Preview(PreviewArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct PreviewArgs {
+    pub name: String,
+    /// 版本（默认 HEAD）
+    #[arg(long)]
+    pub rev: Option<String>,
+    /// 输出目录（默认 <dest>/previews/<name>）
+    #[arg(long)]
+    pub to: Option<PathBuf>,
 }
 
 #[derive(Args, Debug)]

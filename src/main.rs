@@ -44,5 +44,6 @@ fn run() -> anyhow::Result<()> {
         Command::Completions(a) => commands::completions::run(a),
         Command::Man(a) => commands::man::run(a),
         Command::Open(a) => commands::open::run(&dest, a),
+        Command::Preview(a) => commands::preview::run(&dest, a),
     }
 }

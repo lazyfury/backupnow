@@ -84,11 +84,17 @@ fn run_inner(app: &AppConfig, dest: &Path, name: &str, a: &SaveArgs) -> Result<O
         bail!("源目录不存在: {}", source.display());
     }
 
-    if sf.mode == "mirror" {
-        save_mirror(app, &sf, &repo, &source, a.dry_run)
+    let outcome = if sf.mode == "mirror" {
+        save_mirror(app, &sf, &repo, &source, a.dry_run)?
     } else {
-        save_snapshot(app, &mut sf, &repo, &source, a)
+        save_snapshot(app, &mut sf, &repo, &source, a)?
+    };
+
+    // 若已生成预览，则保持刷新
+    if !a.dry_run {
+        let _ = crate::commands::preview::refresh_if_exists(dest, name, &repo);
     }
+    Ok(outcome)
 }
 
 /// snapshot：把普通目录快照进 bare 仓库
