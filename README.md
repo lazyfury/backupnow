@@ -38,9 +38,17 @@
 ## 安装
 
 ```bash
-cd ~/Documents/backupnow
-cargo install --path .        # 安装到 ~/.cargo/bin/backupnow
+# 从 GitHub 直接安装（推荐）
+cargo install --git https://github.com/lazyfury/backupnow
+
+# 或本地源码
+git clone https://github.com/lazyfury/backupnow
+cd backupnow && cargo install --path .
 ```
+
+安装到 `~/.cargo/bin/backupnow`（确保该目录在 `PATH` 中）。
+
+> 中国大陆网络可先设代理：`export all_proxy=http://127.0.0.1:7890`（`cargo` 走 git 协议时同样需要）。
 
 ## 用法
 
