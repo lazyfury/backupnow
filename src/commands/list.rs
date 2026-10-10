@@ -38,7 +38,10 @@ pub fn run(dest: &Path, a: ListArgs) -> Result<()> {
         return Ok(());
     }
 
-    println!("{:<12} {:<10} {:<34} {}", "库", "引擎", "源目录", "最近提交");
+    println!(
+        "{:<12} {:<9} {:<10} {:<34} {}",
+        "库", "模式", "引擎", "源目录", "最近提交"
+    );
     for (sf, repo) in libs {
         let last = Git::bare(&repo)
             .run(&["log", "-1", "--format=%ci"])
@@ -46,7 +49,10 @@ pub fn run(dest: &Path, a: ListArgs) -> Result<()> {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| "-".into());
-        println!("{:<12} {:<10} {:<34} {}", sf.name, sf.engine, sf.source.path, last);
+        println!(
+            "{:<12} {:<9} {:<10} {:<34} {}",
+            sf.name, sf.mode, sf.engine, sf.source.path, last
+        );
     }
     Ok(())
 }

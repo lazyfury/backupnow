@@ -22,6 +22,19 @@
 - 清单同时存在于**源目录**和**仓库目录**，两边内容一致
 - `backupnow list` 直接扫 `<dest>/*/backupnow_sync.json`，无全局注册表
 
+## 两种模式
+
+| | `snapshot`（默认，普通目录） | `mirror`（源目录本身是 git 仓库） |
+|---|---|---|
+| 盘上仓库 | 快照仓库 | 源仓库的**镜像**（全部 refs + 完整历史） |
+| `init` | `git init --bare` + 首次 commit | `git clone --mirror <src> <drive>/<name>.git` |
+| `save` | `add -A` + `commit` | `git fetch --prune '+refs/*:refs/*'`（增量、快） |
+| `restore` | `checkout` | `git clone <drive>/<name>.git <target>` |
+| 忽略规则 | 生效（`info/exclude`） | 不适用（由项目自己的 `.gitignore` 决定） |
+| 备份范围 | 工作区全部文件 | **仅已提交内容**（未提交改动不在内） |
+
+`init` 自动识别：源目录有 `.git` → `mirror`，否则 `snapshot`；也可 `--mode` 手动指定。
+
 ## 安装
 
 ```bash
@@ -33,7 +46,10 @@ cargo install --path .        # 安装到 ~/.cargo/bin/backupnow
 
 ```bash
 # 新建库（默认 dest = /Volumes/数据/Backups）
-backupnow init pi --path ~/.pi
+backupnow init pi --path ~/.pi                     # 普通目录 → snapshot
+backupnow init proj --path ~/code/proj             # 有 .git → 自动 mirror
+backupnow init proj --path ~/code/proj --mode mirror
+backupnow init proj --path ~/code/proj --no-source-manifest   # 不把清单写进源目录
 
 # 列出 / 查看状态
 backupnow list
@@ -133,6 +149,23 @@ backupnow restore pi
 ```
 
 `pathTemplate` 让换机器/换用户名也能算出恢复路径。
+
+## FAQ
+
+**我在源仓库里 `git commit` / `git push`，会影响 backupnow 同步吗？**
+
+不会。
+
+- **snapshot 模式**：源目录根本不是 git 仓库，与任何 commit/push 无关。
+- **mirror 模式**：
+  - 你 `git commit` → 下次 `backupnow save` 用 `git fetch` **自动带上**（增量，只传新对象）。
+  - 你 `git push` 到远端 → 不影响备份。`--mirror` 的 refspec 是 `+refs/*:refs/*`，会连 `refs/remotes/*` 一起镜像。
+  - 工具**只读**源仓库（只 fetch），从不写、从不 push，所以不会干扰你的 git 工作流。
+  - 写入源目录的 `backupnow_sync.json` 是**未跟踪文件**（不想写用 `--no-source-manifest`），且不会被计入未提交警告。
+
+**mirror 模式的未提交改动会被备份吗？**
+
+不会——这是 git 语义。`save` 时若检测到未提交改动，会往 stderr 打警告。
 
 ## 将来接网络
 

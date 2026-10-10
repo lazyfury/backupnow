@@ -8,6 +8,13 @@ use cli::{Cli, Command};
 use config::AppConfig;
 
 fn main() {
+    // 管道被提前关闭（如 `backupnow list | head`）时像普通 Unix 工具一样静默退出，
+    // 而不是让 println! 触发 broken pipe panic。
+    #[cfg(unix)]
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+
     if let Err(e) = run() {
         eprintln!("error: {e:#}");
         std::process::exit(1);

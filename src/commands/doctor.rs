@@ -14,10 +14,7 @@ pub fn run(_app: &AppConfig, dest: &Path, a: DoctorArgs) -> Result<()> {
         problems += 1;
     }
 
-    report(
-        &format!("备份根存在 ({})", dest.display()),
-        dest.is_dir(),
-    );
+    report(&format!("备份根存在 ({})", dest.display()), dest.is_dir());
 
     let (sf, repo) = match locate(dest, &a.name) {
         Ok(v) => v,
@@ -27,6 +24,7 @@ pub fn run(_app: &AppConfig, dest: &Path, a: DoctorArgs) -> Result<()> {
         }
     };
 
+    println!("模式     : {}", sf.mode);
     report(&format!("仓库目录存在 ({})", repo.display()), repo.is_dir());
     report(
         &format!("清单存在 ({})", repo.join(SYNC_FILE).display()),
@@ -37,45 +35,69 @@ pub fn run(_app: &AppConfig, dest: &Path, a: DoctorArgs) -> Result<()> {
         Path::new(&sf.source.path).is_dir(),
     );
 
-    let exclude = repo.join("info/exclude");
-    report("info/exclude 存在", exclude.exists());
-
-    if exclude.exists() {
-        let on_disk = std::fs::read_to_string(&exclude).unwrap_or_default();
-        let expected: String = sf
-            .ignore
-            .iter()
-            .map(|p| format!("{p}\n"))
-            .collect();
-        let on_disk_rules: String = on_disk
-            .lines()
-            .filter(|l| !l.trim().is_empty() && !l.trim().starts_with('#'))
-            .map(|l| format!("{l}\n"))
-            .collect();
-        report("忽略规则与清单一致", on_disk_rules == expected);
-        if on_disk_rules != expected {
+    if sf.mode == "mirror" {
+        let is_repo = git::is_git_repo(Path::new(&sf.source.path));
+        report("源是 git 仓库", is_repo);
+        if !is_repo {
             problems += 1;
-            println!("   （执行 `backupnow save {}` 可自动校准）", sf.name);
         }
-    }
-
-    if Path::new(&sf.source.path).is_dir() && repo.is_dir() {
-        let g = Git::worktree(&repo, &sf.source.path);
-        match g.success(&["rev-parse", "--verify", "HEAD"]) {
-            Ok(true) => report("已有提交", true),
-            _ => {
-                report("已有提交", false);
+        if repo.is_dir() {
+            let g = Git::bare(&repo);
+            let refs = g.run(&["for-each-ref", "--format=%(refname)"]).unwrap_or_default();
+            let n = refs.lines().count();
+            report(&format!("镜像含 {n} 个 ref"), n > 0);
+            if n == 0 {
                 problems += 1;
+            }
+            let remote = g.run(&["config", "--get", "remote.origin.url"]).unwrap_or_default();
+            report(
+                &format!("已配置 remote ({})", remote.trim()),
+                !remote.trim().is_empty(),
+            );
+            if remote.trim().is_empty() {
+                problems += 1;
+            }
+        }
+        let dirty = git::dirty_count(Path::new(&sf.source.path));
+        if dirty > 0 {
+            println!("⚠️  源仓库有 {dirty} 处未提交改动（不会被备份）");
+        }
+    } else {
+        let exclude = repo.join("info/exclude");
+        report("info/exclude 存在", exclude.exists());
+        if exclude.exists() {
+            let on_disk = std::fs::read_to_string(&exclude).unwrap_or_default();
+            let expected: String = sf.ignore.iter().map(|p| format!("{p}\n")).collect();
+            let on_disk_rules: String = on_disk
+                .lines()
+                .filter(|l| !l.trim().is_empty() && !l.trim().starts_with('#'))
+                .map(|l| format!("{l}\n"))
+                .collect();
+            report("忽略规则与清单一致", on_disk_rules == expected);
+            if on_disk_rules != expected {
+                problems += 1;
+                println!("   （执行 `backupnow save {}` 可自动校准）", sf.name);
+            }
+        }
+        if repo.is_dir() && Path::new(&sf.source.path).is_dir() {
+            let g = Git::worktree(&repo, &sf.source.path);
+            match g.success(&["rev-parse", "--verify", "HEAD"]) {
+                Ok(true) => report("已有提交", true),
+                _ => {
+                    report("已有提交", false);
+                    problems += 1;
+                }
             }
         }
     }
 
-    // 源目录里的副本
-    let src_copy = Path::new(&sf.source.path).join(SYNC_FILE);
-    report(
-        &format!("源目录清单副本 ({})", src_copy.display()),
-        src_copy.exists(),
-    );
+    if sf.source_manifest {
+        let src_copy = Path::new(&sf.source.path).join(SYNC_FILE);
+        report(
+            &format!("源目录清单副本 ({})", src_copy.display()),
+            src_copy.exists(),
+        );
+    }
 
     println!();
     if problems == 0 {

@@ -115,3 +115,43 @@ impl Git {
         Ok(self.run(&["rev-parse", "--short", "HEAD"])?.trim().to_string())
     }
 }
+
+/// `git clone --mirror <source> <dest>`，用于镜像已有 git 仓库
+pub fn clone_mirror(source: &Path, dest: &Path) -> Result<()> {
+    let out = Command::new("git")
+        .arg("clone")
+        .arg("--mirror")
+        .arg(source)
+        .arg(dest)
+        .output()
+        .context("执行 git clone --mirror 失败")?;
+    if !out.status.success() {
+        bail!(
+            "git clone --mirror 失败: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    Ok(())
+}
+
+/// 检查一个源目录是否是 git 仓库
+pub fn is_git_repo(source: &Path) -> bool {
+    source.join(".git").exists()
+}
+
+/// 统计源仓库未提交改动数（git status --porcelain），忽略工具自身写入的清单
+pub fn dirty_count(source: &Path) -> usize {
+    Command::new("git")
+        .arg("-C")
+        .arg(source)
+        .args(["status", "--porcelain"])
+        .output()
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .filter(|l| !l.trim().is_empty())
+                .filter(|l| !l.contains(crate::config::SYNC_FILE))
+                .count()
+        })
+        .unwrap_or(0)
+}

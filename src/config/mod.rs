@@ -93,6 +93,12 @@ pub struct SyncFile {
     pub name: String,
     pub engine: String,
     pub repo: String,
+    /// snapshot = 把普通目录快照进 bare 仓库；mirror = 镜像本身就是 git 仓库的源
+    #[serde(default = "default_mode")]
+    pub mode: String,
+    /// 是否把清单写入源目录（mirror 模式下可关掉，避免污染项目）
+    #[serde(default = "default_true", rename = "sourceManifest")]
+    pub source_manifest: bool,
     pub source: SourceRef,
     #[serde(rename = "restoreDir")]
     pub restore_dir: String,
@@ -101,14 +107,30 @@ pub struct SyncFile {
     pub ignore: Vec<String>,
 }
 
+fn default_mode() -> String {
+    "snapshot".into()
+}
+
+fn default_true() -> bool {
+    true
+}
+
 impl SyncFile {
-    pub fn new(name: String, source: &Path, ignore: Vec<String>) -> Self {
+    pub fn new(
+        name: String,
+        source: &Path,
+        ignore: Vec<String>,
+        mode: &str,
+        source_manifest: bool,
+    ) -> Self {
         let path = source.to_string_lossy().to_string();
         Self {
             schema: 1,
             name: name.clone(),
             engine: "git".into(),
             repo: format!("{name}.git"),
+            mode: mode.to_string(),
+            source_manifest,
             source: SourceRef {
                 host: hostname(),
                 user: username(),
@@ -137,18 +159,20 @@ impl SyncFile {
         std::fs::write(path, text).with_context(|| format!("写入清单失败: {}", path.display()))
     }
 
-    /// 同时写入仓库目录与源目录
+    /// 同时写入仓库目录与源目录（后者可被 sourceManifest 关掉）
     pub fn write_all(&self, repo_dir: &Path) -> Result<()> {
         self.write(&repo_dir.join(SYNC_FILE))?;
-        let src = Path::new(&self.source.path).join(SYNC_FILE);
-        if Path::new(&self.source.path).is_dir() {
-            self.write(&src)?;
+        if self.source_manifest && Path::new(&self.source.path).is_dir() {
+            self.write(&Path::new(&self.source.path).join(SYNC_FILE))?;
         }
         Ok(())
     }
 
-    /// 生成 <repo>/info/exclude，供 git 忽略规则
+    /// 生成 <repo>/info/exclude，供 git 忽略规则（仅 snapshot 模式使用）
     pub fn write_exclude(&self, repo_dir: &Path) -> Result<()> {
+        if self.mode != "snapshot" {
+            return Ok(());
+        }
         let mut text = String::from("# 由 backupnow 生成；请用 `backupnow ignore` 管理\n");
         for p in &self.ignore {
             text.push_str(p);

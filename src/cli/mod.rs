@@ -64,6 +64,12 @@ pub struct InitArgs {
     /// 追加忽略规则，可多次
     #[arg(short = 'x', long = "exclude")]
     pub exclude: Vec<String>,
+    /// 模式：snapshot（普通目录快照）| mirror（源目录本身是 git 仓库，镜像其历史）
+    #[arg(long)]
+    pub mode: Option<String>,
+    /// mirror 模式下不把清单写入源目录
+    #[arg(long)]
+    pub no_source_manifest: bool,
 }
 
 #[derive(Args, Debug)]

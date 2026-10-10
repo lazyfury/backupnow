@@ -22,7 +22,29 @@ pub fn run(app: &AppConfig, dest: &Path, a: InitArgs) -> Result<()> {
         bail!("库已存在: {}", repo.display());
     }
 
-    git::init_bare(&repo)?;
+    // 决定模式：显式 --mode > 自动识别（源目录有 .git 则 mirror）
+    let mode = match a.mode.as_deref() {
+        Some(m) => m.to_string(),
+        None if git::is_git_repo(&source) => "mirror".into(),
+        None => "snapshot".into(),
+    };
+    if mode != "snapshot" && mode != "mirror" {
+        bail!("未知模式 `{mode}`（可选 snapshot | mirror）");
+    }
+    if mode == "mirror" && !git::is_git_repo(&source) {
+        bail!(
+            "mirror 模式要求源目录本身是 git 仓库（{} 下没有 .git）",
+            source.display()
+        );
+    }
+
+    let source_manifest = !a.no_source_manifest;
+
+    if mode == "mirror" {
+        git::clone_mirror(&source, &repo)?;
+    } else {
+        git::init_bare(&repo)?;
+    }
 
     let mut ignore = app.default_ignore.clone();
     for x in &a.exclude {
@@ -31,23 +53,50 @@ pub fn run(app: &AppConfig, dest: &Path, a: InitArgs) -> Result<()> {
         }
     }
 
-    let sf = SyncFile::new(a.name.clone(), &source, ignore);
+    let sf = SyncFile::new(a.name.clone(), &source, ignore, &mode, source_manifest);
     sf.write_all(&repo)?;
     sf.write_exclude(&repo)?;
 
-    // 首次快照
-    let g = Git::worktree(&repo, &source);
-    g.run(&["add", "-A"])?;
-    let msg = format!("init: {} @ {}", a.name, sf.created_at);
-    g.run(&["commit", "-m", &msg])?;
-    let head = g.head_short()?;
+    match mode.as_str() {
+        "snapshot" => {
+            let g = Git::worktree(&repo, &source);
+            g.run(&["add", "-A"])?;
+            let msg = format!("init: {} @ {}", a.name, sf.created_at);
+            g.run(&["commit", "-m", &msg])?;
+        }
+        "mirror" => {
+            let g = Git::bare(&repo);
+            let _ = g.run(&["remote", "update", "--prune"]);
+        }
+        _ => unreachable!(),
+    }
 
-    println!("✅ 已创建库 `{}`", a.name);
+    let g = Git::bare(&repo);
+    let refs = g
+        .run(&["for-each-ref", "--format=%(refname)"])
+        .unwrap_or_default()
+        .lines()
+        .count();
+    let head = g
+        .run(&["rev-parse", "--short", "HEAD"])
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+
+    println!("✅ 已创建库 `{}`  (模式: {mode})", a.name);
     println!("   源目录   : {}", source.display());
     println!("   仓库     : {}", repo.display());
     println!("   清单     : {}", repo.join(SYNC_FILE).display());
-    println!("              {}", source.join(SYNC_FILE).display());
-    println!("   首次快照 : {head}");
-    println!("   忽略规则 : {}", sf.ignore.join(", "));
+    if source_manifest {
+        println!("              {}", source.join(SYNC_FILE).display());
+    } else {
+        println!("              （--no-source-manifest：不写源目录）");
+    }
+    if mode == "snapshot" {
+        println!("   首次快照 : {head}");
+        println!("   忽略规则 : {}", sf.ignore.join(", "));
+    } else {
+        println!("   镜像 refs: {refs}");
+    }
     Ok(())
 }
