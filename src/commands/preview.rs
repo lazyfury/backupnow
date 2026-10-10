@@ -1,9 +1,24 @@
 use crate::cli::PreviewArgs;
 use crate::commands::{find_libs, locate};
+use crate::config::SyncFile;
 use crate::git::Git;
 use anyhow::{bail, Context, Result};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+
+/// 预览目录：优先用源目录 basename（保留 .app 等后缀），隐藏名回退到库名
+pub fn preview_dir(dest: &Path, sf: &SyncFile) -> PathBuf {
+    let base = Path::new(&sf.source.path)
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let name = if !base.is_empty() && !base.starts_with('.') {
+        base
+    } else {
+        sf.name.clone()
+    };
+    dest.join("previews").join(name)
+}
 
 /// 把库的某个版本导出成可见目录（清空后重建）
 pub fn export(repo: &Path, target: &Path, rev: &str) -> Result<usize> {
@@ -60,8 +75,8 @@ pub fn export(repo: &Path, target: &Path, rev: &str) -> Result<usize> {
 }
 
 /// 若预览目录已存在则刷新（供 save 调用）
-pub fn refresh_if_exists(dest: &Path, name: &str, repo: &Path) -> Result<()> {
-    let target = dest.join("previews").join(name);
+pub fn refresh_if_exists(dest: &Path, sf: &SyncFile, repo: &Path) -> Result<()> {
+    let target = preview_dir(dest, sf);
     if target.is_dir() {
         export(repo, &target, "HEAD")?;
     }
@@ -81,10 +96,7 @@ pub fn run(dest: &Path, a: PreviewArgs) -> Result<()> {
 
     let name = a.name.clone().context("缺少库名（或使用 --all）")?;
     let (sf, repo) = locate(dest, &name)?;
-    let target = a
-        .to
-        .clone()
-        .unwrap_or_else(|| dest.join("previews").join(&sf.name));
+    let target = a.to.clone().unwrap_or_else(|| preview_dir(dest, &sf));
     let rev = a.rev.clone().unwrap_or_else(|| "HEAD".into());
     let n = export(&repo, &target, &rev)?;
     println!("✅ 预览已生成: {}", target.display());
@@ -101,7 +113,7 @@ fn preview_all(dest: &Path, a: &PreviewArgs) -> Result<()> {
     let mut ok = 0;
     let mut fail = 0;
     for (sf, repo) in libs {
-        let target = dest.join("previews").join(&sf.name);
+        let target = preview_dir(dest, &sf);
         match export(&repo, &target, &rev) {
             Ok(n) => {
                 ok += 1;

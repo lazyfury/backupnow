@@ -4,10 +4,10 @@ use anyhow::Result;
 use std::path::Path;
 
 pub fn run(dest: &Path, a: OpenArgs) -> Result<()> {
-    let (_sf, repo) = locate(dest, &a.name)?;
+    let (sf, repo) = locate(dest, &a.name)?;
 
     // 优先打开预览目录（若存在）
-    let preview = dest.join("previews").join(&a.name);
+    let preview = crate::commands::preview::preview_dir(dest, &sf);
     let target = if preview.is_dir() { preview } else { repo };
 
     #[cfg(target_os = "macos")]

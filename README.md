@@ -269,7 +269,8 @@ backupnow preview pi --rev <commit>   # 导出指定版本
 backupnow preview pi --to /tmp/see    # 导出到别处
 ```
 
-- 默认位置 `<dest>/previews/<name>/`（`list` 不会把它当成库）
+- 默认位置 `<dest>/previews/<源目录名>/`：如 `Aseprite.app`、`kacha.app`（**保留 `.app` 后缀**）；源名以 `.` 开头时回退到库名（如 `pi`）
+- `list` 不会把预览当成库
 - **一旦生成，`save` 会自动刷新它**（删除的文件也会同步删掉）
 - `open` 会优先打开预览目录
 

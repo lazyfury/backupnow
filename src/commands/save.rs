@@ -92,7 +92,7 @@ fn run_inner(app: &AppConfig, dest: &Path, name: &str, a: &SaveArgs) -> Result<O
 
     // 若已生成预览，则保持刷新
     if !a.dry_run {
-        let _ = crate::commands::preview::refresh_if_exists(dest, name, &repo);
+        let _ = crate::commands::preview::refresh_if_exists(dest, &sf, &repo);
     }
     Ok(outcome)
 }
