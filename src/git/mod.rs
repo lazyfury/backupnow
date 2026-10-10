@@ -11,7 +11,7 @@ pub fn ensure_git() -> Result<()> {
         .context("找不到 git，请先安装")
 }
 
-/// `git init --bare`，并把仓库标记为可配合显式 --work-tree 使用
+/// `git init --bare`，得到纯净 bare 仓库
 pub fn init_bare(repo: &Path) -> Result<()> {
     let out = Command::new("git")
         .args(["init", "--bare", "--initial-branch=main"])
@@ -24,12 +24,8 @@ pub fn init_bare(repo: &Path) -> Result<()> {
             String::from_utf8_lossy(&out.stderr).trim()
         );
     }
-    // 允许配合显式 --work-tree 执行 add/commit；不写 core.worktree，保持可 clone
-    let _ = Command::new("git")
-        .arg("--git-dir")
-        .arg(repo)
-        .args(["config", "core.bare", "false"])
-        .output();
+    // 保持 core.bare=true：CLI 每次显式传 --work-tree 即可 add/commit，
+    // 同时仓库仍是标准 bare，可 clone / push / 网络服务。
     Ok(())
 }
 

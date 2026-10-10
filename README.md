@@ -167,6 +167,22 @@ backupnow restore pi
 
 不会——这是 git 语义。`save` 时若检测到未提交改动，会往 stderr 打警告。
 
+**盘上的 bare 库能当 git remote 用吗？**
+
+能。盘上仓库始终是**标准 bare 仓库**（`core.bare=true`，不写 `core.worktree`），所以：
+
+```bash
+# 任意位置 clone 出来查看/恢复
+git clone /Volumes/数据/Backups/pi.git /tmp/pi
+
+# 也可以直接 push（当成 remote）
+git remote add drive /Volumes/数据/Backups/pi.git
+git push drive main
+```
+
+注意：**不能**从源目录 `~/.pi` 直接 `git remote add` —— 源目录故意不建 `.git`。
+工具本身也不走 remote，而是用 `git --git-dir=<盘> --work-tree=<源>` 直接写。
+
 ## 将来接网络
 
 因为仓库是纯净 bare 仓库，任何 git 传输方式都能直接服务，无需改造：
