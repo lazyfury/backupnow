@@ -41,5 +41,8 @@ fn run() -> anyhow::Result<()> {
         Command::Doctor(a) => commands::doctor::run(&app, &dest, a),
         Command::Config(a) => commands::config::run(&app, a),
         Command::Timer(a) => commands::timer::run(&app, &dest, a),
+        Command::Completions(a) => commands::completions::run(a),
+        Command::Man(a) => commands::man::run(a),
+        Command::Open(a) => commands::open::run(&dest, a),
     }
 }

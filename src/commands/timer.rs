@@ -118,6 +118,7 @@ pub fn run(app: &AppConfig, dest: &Path, a: TimerArgs) -> Result<()> {
                     name,
                     message: None,
                     quiet: false,
+                    dry_run: false,
                 },
             )?;
         }

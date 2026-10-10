@@ -1,9 +1,12 @@
+pub mod completions;
 pub mod config;
 pub mod doctor;
 pub mod ignore;
 pub mod init;
 pub mod list;
 pub mod log;
+pub mod man;
+pub mod open;
 pub mod restore;
 pub mod save;
 pub mod status;

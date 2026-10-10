@@ -34,7 +34,7 @@ fn run_inner(app: &AppConfig, dest: &Path, a: SaveArgs) -> Result<Outcome> {
     }
 
     if sf.mode == "mirror" {
-        save_mirror(app, &sf, &repo, &source)
+        save_mirror(app, &sf, &repo, &source, a.dry_run)
     } else {
         save_snapshot(app, &mut sf, &repo, &source, &a)
     }
@@ -53,6 +53,25 @@ fn save_snapshot(
     // 校准忽略规则
     sf.ignore = merge_ignore(&app.default_ignore, &sf.ignore);
     sf.write_exclude(repo)?;
+
+    if a.dry_run {
+        let g = Git::worktree(repo, source);
+        let status = g.run(&["status", "--porcelain"])?;
+        let changed = status.lines().filter(|l| !l.trim().is_empty()).count();
+        let detrack = g.run(&["ls-files", "-ci", "--exclude-standard", "-z"])?;
+        let detrack_n = detrack.split('\0').filter(|s| !s.is_empty()).count();
+        println!(
+            "[dry-run] `{}`：{changed} 项改动，{detrack_n} 项将取消跟踪",
+            sf.name
+        );
+        for l in status.lines().filter(|l| !l.trim().is_empty()).take(50) {
+            println!("  {l}");
+        }
+        return Ok(Outcome {
+            detail: format!("dry-run: {changed} 项改动"),
+        });
+    }
+
     sf.write_all(repo)?;
 
     // 取消"已被忽略但仍跟踪"的文件
@@ -132,13 +151,42 @@ fn save_snapshot(
 }
 
 /// mirror：把源仓库的所有 refs 拉取到盘上镜像
-fn save_mirror(app: &AppConfig, sf: &SyncFile, repo: &Path, source: &Path) -> Result<Outcome> {
+fn save_mirror(
+    app: &AppConfig,
+    sf: &SyncFile,
+    repo: &Path,
+    source: &Path,
+    dry_run: bool,
+) -> Result<Outcome> {
     let dirty = git::dirty_count(source);
     if dirty > 0 {
         eprintln!("⚠️  源仓库有 {dirty} 处未提交改动，不会被备份（mirror 只备份已提交内容）");
     }
 
     let g = Git::bare(repo);
+
+    if dry_run {
+        let out = std::process::Command::new("git")
+            .arg("--git-dir")
+            .arg(repo)
+            .args(["fetch", "--dry-run", "--prune"])
+            .output()?;
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        println!("[dry-run] `{}` 将 fetch：", sf.name);
+        if text.trim().is_empty() {
+            println!("  （无更新）");
+        } else {
+            print!("{text}");
+        }
+        return Ok(Outcome {
+            detail: "dry-run".into(),
+        });
+    }
+
     let before = g.run(&["rev-parse", "--all"]).unwrap_or_default();
     g.run(&["remote", "update", "--prune"])?;
     let after = g.run(&["rev-parse", "--all"]).unwrap_or_default();

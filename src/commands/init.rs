@@ -52,6 +52,19 @@ pub fn run(app: &AppConfig, dest: &Path, a: InitArgs) -> Result<()> {
             ignore.push(x.clone());
         }
     }
+    for p in &a.preset {
+        match crate::config::preset(p) {
+            Some(pats) => {
+                for pat in pats {
+                    let s = pat.to_string();
+                    if !ignore.contains(&s) {
+                        ignore.push(s);
+                    }
+                }
+            }
+            None => bail!("未知预设: {p}（可选 macos,xcode,node,python,rust）"),
+        }
+    }
 
     let sf = SyncFile::new(a.name.clone(), &source, ignore, &mode, source_manifest);
     sf.write_all(&repo)?;

@@ -38,6 +38,30 @@ pub enum Command {
     Config(ConfigArgs),
     /// 定时任务（平台后端：macOS/launchd）
     Timer(TimerArgs),
+    /// 生成 shell 补全脚本
+    Completions(CompletionsArgs),
+    /// 生成 man page
+    Man(ManArgs),
+    /// 在 Finder 打开盘上仓库
+    Open(OpenArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct CompletionsArgs {
+    /// 目标 shell
+    pub shell: clap_complete::Shell,
+}
+
+#[derive(Args, Debug)]
+pub struct ManArgs {
+    /// 输出目录（省略则打印到 stdout）
+    #[arg(long)]
+    pub out: Option<PathBuf>,
+}
+
+#[derive(Args, Debug)]
+pub struct OpenArgs {
+    pub name: String,
 }
 
 #[derive(Args, Debug)]
@@ -113,6 +137,9 @@ pub struct InitArgs {
     /// 追加忽略规则，可多次
     #[arg(short = 'x', long = "exclude")]
     pub exclude: Vec<String>,
+    /// 忽略预设，逗号分隔：macos,xcode,node,python,rust
+    #[arg(long, value_delimiter = ',')]
+    pub preset: Vec<String>,
     /// 模式：snapshot（普通目录快照）| mirror（源目录本身是 git 仓库，镜像其历史）
     #[arg(long)]
     pub mode: Option<String>,
@@ -147,6 +174,9 @@ pub struct SaveArgs {
     /// 本次不发系统通知
     #[arg(long)]
     pub quiet: bool,
+    /// 只预览，不提交
+    #[arg(long)]
+    pub dry_run: bool,
 }
 
 #[derive(Args, Debug)]
@@ -179,6 +209,9 @@ pub struct RestoreArgs {
     /// 目标非空时强制覆盖
     #[arg(long)]
     pub force: bool,
+    /// 只预览，不写入
+    #[arg(long)]
+    pub dry_run: bool,
 }
 
 #[derive(Args, Debug)]

@@ -6,6 +6,39 @@ pub const SYNC_FILE: &str = "backupnow_sync.json";
 pub const DEFAULT_DEST: &str = "/Volumes/数据/Backups";
 pub const DEFAULT_IGNORE: &[&str] = &[".DS_Store", "agent/install", "node_modules", "agent/sessions"];
 
+/// 忽略预设
+pub fn preset(name: &str) -> Option<&'static [&'static str]> {
+    Some(match name {
+        "macos" => &[
+            ".DS_Store",
+            ".AppleDouble",
+            "._*",
+            ".Spotlight-V100",
+            ".Trashes",
+            ".fseventsd",
+        ],
+        "xcode" => &[
+            "DerivedData",
+            "*.xcuserstate",
+            "xcuserdata",
+            "*.xccheckout",
+            "build",
+            ".build",
+        ],
+        "node" => &["node_modules", "dist", ".npm", ".cache", "coverage"],
+        "python" => &[
+            "__pycache__",
+            "*.pyc",
+            ".venv",
+            "venv",
+            ".mypy_cache",
+            ".pytest_cache",
+        ],
+        "rust" => &["target"],
+        _ => return None,
+    })
+}
+
 /// 应用级默认值（~/.config/backupnow/config.json）
 #[derive(Debug, Clone)]
 pub struct AppConfig {

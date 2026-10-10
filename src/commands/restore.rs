@@ -45,6 +45,7 @@ fn restore_all(dest: &Path, a: &RestoreArgs) -> Result<()> {
             rev: a.rev.clone(),
             path: a.path.clone(),
             force: a.force,
+            dry_run: a.dry_run,
         };
         let r = if sf.mode == "mirror" {
             restore_mirror(&sf, &repo, &target, &sub)
@@ -80,6 +81,23 @@ fn apply_xattr(repo: &Path, target: &Path, commit: &str, sub: Option<&str>) -> R
 }
 
 fn restore_snapshot(sf: &SyncFile, repo: &Path, target: &Path, a: &RestoreArgs) -> Result<()> {
+    if a.dry_run {
+        let g = Git::bare(repo);
+        let rev = a.rev.clone().unwrap_or_else(|| "HEAD".into());
+        let mut args: Vec<&str> = vec!["ls-tree", "-r", "--name-only", &rev];
+        if let Some(p) = &a.path {
+            args.push("--");
+            args.push(p);
+        }
+        let out = g.run(&args)?;
+        let n = out.lines().count();
+        println!("[dry-run] `{}` 将恢复 {n} 个文件 → {}", sf.name, target.display());
+        for l in out.lines().take(50) {
+            println!("  {l}");
+        }
+        return Ok(());
+    }
+
     let non_empty = target.is_dir()
         && std::fs::read_dir(target)
             .map(|mut it| it.next().is_some())
@@ -106,6 +124,16 @@ fn restore_snapshot(sf: &SyncFile, repo: &Path, target: &Path, a: &RestoreArgs) 
 }
 
 fn restore_mirror(sf: &SyncFile, repo: &Path, target: &Path, a: &RestoreArgs) -> Result<()> {
+    if a.dry_run {
+        println!(
+            "[dry-run] `{}` 将 git clone {} → {}",
+            sf.name,
+            repo.display(),
+            target.display()
+        );
+        return Ok(());
+    }
+
     let non_empty = target.is_dir()
         && std::fs::read_dir(target)
             .map(|mut it| it.next().is_some())

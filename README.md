@@ -57,6 +57,7 @@ cd backupnow && cargo install --path .
 backupnow init pi --path ~/.pi                     # 普通目录 → snapshot
 backupnow init proj --path ~/code/proj             # 有 .git → 自动 mirror
 backupnow init proj --path ~/code/proj --mode mirror
+backupnow init proj --path ~/code/proj --preset macos,xcode,node   # 忽略预设
 backupnow init proj --path ~/code/proj --no-source-manifest   # 不把清单写进源目录
 
 # 列出 / 查看状态
@@ -83,7 +84,18 @@ backupnow ignore pi edit
 
 # 自检
 backupnow doctor pi
+
+# 预览（不写入）
+backupnow save pi --dry-run
+backupnow restore pi --dry-run
+
+# 补全 / man / Finder
+backupnow completions zsh > ~/.zfunc/_backupnow
+backupnow man --out ~/.local/share/man/man1
+backupnow open pi
 ```
+
+忽略预设：`macos` / `xcode` / `node` / `python` / `rust`（可逗号组合）。
 
 ## 忽略规则
 
