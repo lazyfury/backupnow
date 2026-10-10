@@ -95,6 +95,7 @@ backupnow restore pi --dry-run
 backupnow completions zsh > ~/.zfunc/_backupnow
 backupnow man --out ~/.local/share/man/man1
 backupnow open pi
+backupnow preview pi                 # 导出成可见目录（预览）
 ```
 
 忽略预设：`macos` / `xcode` / `node` / `python` / `rust`（可逗号组合）。
@@ -241,6 +242,24 @@ launchd 任务默认带 `LowPriorityIO` / `Nice=5` / `ProcessType=Background`，
 - **电池供电时跳过**（除非安装时没加 `--skip-on-battery`）
 - 输出写到 `~/Library/Logs/backupnow/<name>.{out,err}.log`
 - 手动立即触发一次（调试用）：`launchctl kickstart -k gui/$(id -u)/com.backupnow.timer.<name>`
+
+## 预览（bare 仓库看不见文件）
+
+bare 仓库在 Finder 里看不到文件。`preview` 把某个版本导出成一个**可见目录**，方便浏览/手取：
+
+```bash
+backupnow preview pi                  # → <dest>/previews/pi/（默认 HEAD）
+backupnow preview pi --rev <commit>   # 导出指定版本
+backupnow preview pi --to /tmp/see    # 导出到别处
+```
+
+- 默认位置 `<dest>/previews/<name>/`（`list` 不会把它当成库）
+- **一旦生成，`save` 会自动刷新它**（删除的文件也会同步删掉）
+- `open` 会优先打开预览目录
+
+## 路线图 / TODO
+
+- [ ] **bundle 模式**：多个文件夹（如 `App.app` + 其配置/资源）收集到**一个可见仓库**（worktree 即预览）
 
 ## FAQ
 
