@@ -146,20 +146,26 @@ fn plist_xml(job: &JobSpec, out_log: &std::path::Path, err_log: &std::path::Path
     ));
 
     s.push_str("  <key>ProgramArguments</key>\n  <array>\n");
-    let args = [
-        job.binary.to_string_lossy().to_string(),
-        "timer".to_string(),
-        "run".to_string(),
-        job.name.clone(),
-        "--dest".to_string(),
-        job.dest.to_string_lossy().to_string(),
-    ];
+    let args = {
+        let mut v = vec![
+            job.binary.to_string_lossy().to_string(),
+            "timer".to_string(),
+            "run".to_string(),
+            job.name.clone(),
+            "--dest".to_string(),
+            job.dest.to_string_lossy().to_string(),
+        ];
+        if job.allow_battery {
+            v.push("--allow-battery".to_string());
+        }
+        v
+    };
     for a in args {
         s.push_str(&format!("    <string>{}</string>\n", xml_escape(&a)));
     }
     s.push_str("  </array>\n");
 
-    match job.schedule {
+    match &job.schedule {
         Schedule::Interval(secs) => {
             s.push_str(&format!("  <key>StartInterval</key><integer>{secs}</integer>\n"));
         }
@@ -172,9 +178,20 @@ fn plist_xml(job: &JobSpec, out_log: &std::path::Path, err_log: &std::path::Path
         Schedule::OnMount => {
             s.push_str("  <key>StartOnMount</key><true/>\n");
         }
+        Schedule::OnVolume(p) => {
+            let watch = p.parent().unwrap_or(std::path::Path::new("/Volumes"));
+            s.push_str("  <key>WatchPaths</key>\n  <array>\n");
+            s.push_str(&format!(
+                "    <string>{}</string>\n",
+                xml_escape(&watch.to_string_lossy())
+            ));
+            s.push_str("  </array>\n");
+        }
     }
 
     s.push_str("  <key>ProcessType</key><string>Background</string>\n");
+    s.push_str("  <key>LowPriorityIO</key><true/>\n");
+    s.push_str("  <key>Nice</key><integer>5</integer>\n");
     s.push_str(&format!(
         "  <key>StandardOutPath</key><string>{}</string>\n",
         xml_escape(&out_log.to_string_lossy())
@@ -189,6 +206,9 @@ fn plist_xml(job: &JobSpec, out_log: &std::path::Path, err_log: &std::path::Path
 
 /// 从 plist 文本里粗略还原调度描述
 fn describe_plist(text: &str) -> String {
+    if text.contains("WatchPaths") {
+        return "卷挂载时".into();
+    }
     if text.contains("StartOnMount") {
         return "盘挂载时".into();
     }

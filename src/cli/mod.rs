@@ -52,14 +52,20 @@ pub enum TimerAction {
     Install {
         name: String,
         /// 固定间隔，如 30m / 1h / 3600s
-        #[arg(long, conflicts_with_all = ["daily", "on_mount"])]
+        #[arg(long, conflicts_with_all = ["daily", "on_mount", "on_volume"])]
         every: Option<String>,
         /// 每天某时刻，如 03:00
-        #[arg(long, conflicts_with_all = ["every", "on_mount"])]
+        #[arg(long, conflicts_with_all = ["every", "on_mount", "on_volume"])]
         daily: Option<String>,
         /// 盘挂载时触发
-        #[arg(long, conflicts_with_all = ["every", "daily"])]
+        #[arg(long, conflicts_with_all = ["every", "daily", "on_volume"])]
         on_mount: bool,
+        /// 指定卷挂载时触发（卷路径，如 /Volumes/数据）
+        #[arg(long, conflicts_with_all = ["every", "daily", "on_mount"])]
+        on_volume: Option<PathBuf>,
+        /// 电池供电时跳过（默认不跳）
+        #[arg(long)]
+        skip_on_battery: bool,
     },
     /// 卸载定时任务
     Uninstall { name: String },
@@ -67,9 +73,14 @@ pub enum TimerAction {
     Status { name: String },
     /// 列出所有任务
     List,
-    /// 内部入口：由调度器调用（含挂载检查）
+    /// 内部入口：由调度器调用（含挂载/电源检查）
     #[command(hide = true)]
-    Run { name: String },
+    Run {
+        name: String,
+        /// 电池供电时也运行
+        #[arg(long)]
+        allow_battery: bool,
+    },
 }
 
 #[derive(Args, Debug)]

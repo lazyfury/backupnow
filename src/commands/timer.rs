@@ -12,23 +12,37 @@ pub fn run(app: &AppConfig, dest: &Path, a: TimerArgs) -> Result<()> {
             every,
             daily,
             on_mount,
+            on_volume,
+            skip_on_battery,
         } => {
-            // 校验库存在
             let (sf, _repo) = locate(dest, &name)?;
-            let schedule = build_schedule(every, daily, on_mount)?;
+            let schedule = build_schedule(every, daily, on_mount, on_volume)?;
             let binary = std::env::current_exe().context("无法确定自身可执行文件路径")?;
             let job = JobSpec {
                 name: sf.name.clone(),
                 dest: dest.to_path_buf(),
                 binary,
                 schedule: schedule.clone(),
+                allow_battery: !skip_on_battery,
             };
             let sched = platform::scheduler();
             sched.install(&job)?;
 
             println!("✅ 已安装定时任务 `{}`（后端: {}）", sf.name, sched.platform());
             println!("   调度     : {}", schedule.describe());
-            println!("   命令     : backupnow timer run {} --dest {}", sf.name, dest.display());
+            println!(
+                "   电源     : {}",
+                if skip_on_battery {
+                    "电池时跳过"
+                } else {
+                    "不限"
+                }
+            );
+            println!(
+                "   命令     : backupnow timer run {} --dest {}",
+                sf.name,
+                dest.display()
+            );
             if let Some(hint) = sched.log_hint(&sf.name) {
                 println!("   日志     : {hint}");
             }
@@ -81,19 +95,22 @@ pub fn run(app: &AppConfig, dest: &Path, a: TimerArgs) -> Result<()> {
                 println!("{n:<14} {desc}");
             }
         }
-        TimerAction::Run { name } => {
-            // 调度器入口：盘不可用时安静跳过（不算失败）
-            if locate(dest, &name).is_err() {
+        TimerAction::Run {
+            name,
+            allow_battery,
+        } => {
+            if !allow_battery && on_battery() {
                 eprintln!(
-                    "[{}] 备份根不可用（盘未挂载？），跳过 `{name}`。",
-                    chrono::Local::now().to_rfc3339()
+                    "[{}] 电池供电，跳过 `{name}`（--allow-battery 可强制）",
+                    now()
                 );
                 return Ok(());
             }
-            eprintln!(
-                "[{}] 开始备份 `{name}`",
-                chrono::Local::now().to_rfc3339()
-            );
+            if locate(dest, &name).is_err() {
+                eprintln!("[{}] 备份根不可用（盘未挂载？），跳过 `{name}`。", now());
+                return Ok(());
+            }
+            eprintln!("[{}] 开始备份 `{name}`", now());
             save::run(
                 app,
                 dest,
@@ -112,7 +129,11 @@ fn build_schedule(
     every: Option<String>,
     daily: Option<String>,
     on_mount: bool,
+    on_volume: Option<std::path::PathBuf>,
 ) -> Result<Schedule> {
+    if let Some(p) = on_volume {
+        return Ok(Schedule::OnVolume(p));
+    }
     if on_mount {
         return Ok(Schedule::OnMount);
     }
@@ -122,4 +143,22 @@ fn build_schedule(
     }
     let e = every.unwrap_or_else(|| "1h".into());
     Ok(Schedule::Interval(platform::parse_duration(&e)?))
+}
+
+fn now() -> String {
+    chrono::Local::now().to_rfc3339()
+}
+
+#[cfg(target_os = "macos")]
+fn on_battery() -> bool {
+    std::process::Command::new("pmset")
+        .args(["-g", "batt"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains("Battery Power"))
+        .unwrap_or(false)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn on_battery() -> bool {
+    false
 }

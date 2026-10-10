@@ -14,6 +14,8 @@ pub enum Schedule {
     Daily { hour: u8, minute: u8 },
     /// 盘挂载时触发
     OnMount,
+    /// 指定卷挂载时触发
+    OnVolume(PathBuf),
 }
 
 impl Schedule {
@@ -22,6 +24,7 @@ impl Schedule {
             Schedule::Interval(s) => format!("每 {}", human_duration(*s)),
             Schedule::Daily { hour, minute } => format!("每天 {hour:02}:{minute:02}"),
             Schedule::OnMount => "盘挂载时".into(),
+            Schedule::OnVolume(p) => format!("卷挂载时（{}）", p.display()),
         }
     }
 }
@@ -33,6 +36,8 @@ pub struct JobSpec {
     pub dest: PathBuf,
     pub binary: PathBuf,
     pub schedule: Schedule,
+    /// 是否允许电池下运行（写入 plist 的 --allow-battery）
+    pub allow_battery: bool,
 }
 
 impl JobSpec {

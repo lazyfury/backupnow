@@ -209,14 +209,19 @@ backupnow save pi --quiet           # 仅本次不发
 backupnow timer install pi --every 1h        # 固定间隔（默认 1h）
 backupnow timer install pi --daily 03:00     # 每天某时刻
 backupnow timer install pi --on-mount        # 盘挂载时触发
+backupnow timer install pi --on-volume /Volumes/数据   # 指定卷挂载时
+backupnow timer install pi --every 1h --skip-on-battery  # 电池供电时跳过
 backupnow timer list
 backupnow timer status pi
 backupnow timer uninstall pi
 ```
 
+launchd 任务默认带 `LowPriorityIO` / `Nice=5` / `ProcessType=Background`，不抢前台资源。
+
 调度器实际执行：`backupnow timer run <name> --dest <root>`
 
 - **盘未挂载时安静跳过**（exit 0，不算失败）
+- **电池供电时跳过**（除非安装时没加 `--skip-on-battery`）
 - 输出写到 `~/Library/Logs/backupnow/<name>.{out,err}.log`
 - 手动立即触发一次（调试用）：`launchctl kickstart -k gui/$(id -u)/com.backupnow.timer.<name>`
 
